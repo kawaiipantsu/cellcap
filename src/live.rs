@@ -165,15 +165,66 @@ fn dtap_detail(pd: u8, mt: u8, l3: &[u8]) -> String {
         },
         (0x05, 0x12) => "128-bit RAND challenge".into(),
         (0x05, 0x32) => "network name / time".into(),
+        // Location Updating Accept: the LAI the subscriber is now registered to.
+        (0x05, 0x02) => match l3.get(2..7).and_then(|b| gsmtap::plmn(&b[0..3]).map(|p| (p, b))) {
+            Some(((mcc, mnc), b)) => {
+                let lac = u16::from_be_bytes([b[3], b[4]]);
+                format!("accepted on {} LAC {lac}", pretty_plmn(&mcc, &mnc))
+            }
+            None => "accepted".into(),
+        },
+        // Location Updating Reject / CM Service Reject: why.
+        (0x05, 0x04) | (0x05, 0x22) => match l3.get(2) {
+            Some(c) => mm_cause(*c).to_string(),
+            None => String::new(),
+        },
         // Ciphering Mode Command: octet 3 bit 0 = start/stop, bits 1-3 = A5 algo.
         (0x06, 0x35) => match l3.get(2) {
             Some(o) if o & 0x01 == 0 => "no ciphering".into(),
             Some(o) => format!("start A5/{}", ((o >> 1) & 0x07) + 1),
             None => String::new(),
         },
+        // Channel Release: the RR cause.
+        (0x06, 0x0D) => match l3.get(2) {
+            Some(c) => rr_cause(*c).to_string(),
+            None => String::new(),
+        },
         (0x03, 0x05) => "incoming call".into(),
         (0x09, 0x01) => "message delivery".into(),
         _ => String::new(),
+    }
+}
+
+/// Mobility-management reject cause in a few words (TS 24.008 §10.5.3.6).
+fn mm_cause(c: u8) -> String {
+    match c {
+        2 => "IMSI unknown in HLR".into(),
+        3 => "illegal MS".into(),
+        4 => "IMSI unknown in VLR".into(),
+        5 => "IMEI not accepted".into(),
+        6 => "illegal ME".into(),
+        11 => "PLMN not allowed".into(),
+        12 => "location area not allowed".into(),
+        13 => "roaming not allowed here".into(),
+        15 => "no suitable cells in area".into(),
+        17 => "network failure".into(),
+        22 => "congestion".into(),
+        32 => "service not supported".into(),
+        _ => format!("cause {c}"),
+    }
+}
+
+/// Radio-resource cause in a few words (TS 44.018 §10.5.2.31).
+fn rr_cause(c: u8) -> String {
+    match c {
+        0 => "normal".into(),
+        1 => "abnormal, unspecified".into(),
+        2 => "channel unacceptable".into(),
+        4 => "no activity on the radio path".into(),
+        5 => "preemptive release".into(),
+        8 => "handover impossible".into(),
+        9 => "channel mode unacceptable".into(),
+        _ => format!("cause {c}"),
     }
 }
 
@@ -412,7 +463,15 @@ mod tests {
         assert_eq!(dtap_detail(0x06, 0x35, &[0x06, 0x35, 0x00]), "no ciphering");
         // Authentication Request always carries a RAND.
         assert_eq!(dtap_detail(0x05, 0x12, &[0x05, 0x12]), "128-bit RAND challenge");
-        // A message with nothing extra to say.
-        assert_eq!(dtap_detail(0x06, 0x0D, &[0x06, 0x0D]), "");
+        // Location Updating Reject with cause "IMSI unknown in HLR" (2).
+        assert_eq!(dtap_detail(0x05, 0x04, &[0x05, 0x04, 0x02]), "IMSI unknown in HLR");
+        // Channel Release, normal.
+        assert_eq!(dtap_detail(0x06, 0x0D, &[0x06, 0x0D, 0x00]), "normal");
+        // Location Updating Accept names the LAI (PLMN 238/01, LAC 431).
+        let accept = [0x05, 0x02, 0x32, 0xF8, 0x10, 0x01, 0xAF];
+        assert_eq!(
+            dtap_detail(0x05, 0x02, &accept),
+            format!("accepted on {} LAC 431", pretty_plmn("238", "01"))
+        );
     }
 }

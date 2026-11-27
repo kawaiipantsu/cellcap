@@ -10,7 +10,9 @@ All notable changes to cellcap. Versions follow [Semantic Versioning](https://se
   the clear flagged); now *Identity Request* shows which identity it asks for (an IMSI-catcher tell),
   *Ciphering Mode Command* shows the A5 algorithm it starts (or "no ciphering"), *Authentication
   Request* notes the RAND challenge, and TMSI reallocation / MM information / call setup / SMS are
-  annotated. Best-effort and byte-guarded; Wireshark remains authoritative.
+  annotated. *Location Updating Accept* names the LAI it registers to; *Location Updating Reject* /
+  *CM Service Reject* give the cause (IMSI unknown in HLR, PLMN not allowed, …); *Channel Release*
+  gives the RR cause. Best-effort and byte-guarded; Wireshark remains authoritative.
 
 ## [1.1.0] — 2026-11-27
 
