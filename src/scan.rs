@@ -102,7 +102,9 @@ pub fn probe(
     Ok((frames, cell))
 }
 
-/// Sweep the bands, then probe the strongest channels.
+/// Scan the bands for cells. Devices with a power-sweep tool (RTL-SDR, HackRF)
+/// use cellcap's own sweep-then-probe; others (UHD, SoapySDR) are scanned with
+/// grgsm_scanner, which does the whole job itself.
 pub fn scan(
     radio: &Radio,
     socket: &UdpSocket,
@@ -110,6 +112,9 @@ pub fn scan(
     top: usize,
     probe_seconds: u64,
 ) -> Result<Vec<Found>> {
+    if !radio.can_sweep() {
+        return scan_with_scanner(radio, bands);
+    }
     let mut found = Vec::new();
     for band in bands {
         if crate::stopping() {
@@ -166,6 +171,40 @@ pub fn scan(
             .cmp(&(a.cell.is_some(), a.frames > 0))
             .then(b.candidate.power_db.total_cmp(&a.candidate.power_db))
     });
+    Ok(found)
+}
+
+/// Scan with grgsm_scanner, for devices without a power-sweep tool.
+fn scan_with_scanner(radio: &Radio, bands: &[Band]) -> Result<Vec<Found>> {
+    let mut found = Vec::new();
+    for band in bands {
+        if crate::stopping() {
+            break;
+        }
+        eprintln!(
+            "info: scanning {} with grgsm_scanner ({})",
+            band.name, radio.device
+        );
+        let cells = radio.scan_cells(band.name, 2_000_000)?;
+        eprintln!("info: {} cell(s) found in {}", cells.len(), band.name);
+        for sc in cells {
+            found.push(Found {
+                candidate: Candidate {
+                    arfcn: sc.arfcn,
+                    hz: sc.freq_hz,
+                    power_db: sc.power_db,
+                },
+                frames: 1,
+                cell: Some(Cell {
+                    mcc: sc.mcc.to_string(),
+                    mnc: sc.mnc.to_string(),
+                    lac: sc.lac,
+                    cid: sc.cid,
+                }),
+            });
+        }
+    }
+    found.sort_by(|a, b| b.candidate.power_db.total_cmp(&a.candidate.power_db));
     Ok(found)
 }
 

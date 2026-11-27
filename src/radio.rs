@@ -62,6 +62,66 @@ pub struct Radio {
 /// One power measurement: centre frequency and level in dB.
 pub type Power = (f64, f64);
 
+/// A cell reported by grgsm_scanner.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScannedCell {
+    pub arfcn: u16,
+    pub freq_hz: u64,
+    pub cid: u16,
+    pub lac: u16,
+    pub mcc: u16,
+    pub mnc: u16,
+    pub power_db: f64,
+}
+
+/// Parse grgsm_scanner output, keeping its cell lines. Each is formatted
+/// `ARFCN: %4u, Freq: %6.1fM, CID: %5u, LAC: %5u, MCC: %3u, MNC: %3u, Pwr: %3i`.
+pub fn parse_scanner(out: &str) -> Vec<ScannedCell> {
+    out.lines().filter_map(parse_scanner_line).collect()
+}
+
+fn parse_scanner_line(line: &str) -> Option<ScannedCell> {
+    if !line.contains("ARFCN:") || !line.contains("Freq:") {
+        return None;
+    }
+    let mut arfcn = None;
+    let mut freq_hz = None;
+    let mut cid = None;
+    let mut lac = None;
+    let mut mcc = None;
+    let mut mnc = None;
+    let mut pwr = None;
+    for field in line.split(',') {
+        let (key, value) = field.split_once(':')?;
+        let value = value.trim();
+        match key.trim() {
+            "ARFCN" => arfcn = value.parse().ok(),
+            "Freq" => {
+                freq_hz = value
+                    .trim_end_matches('M')
+                    .parse::<f64>()
+                    .ok()
+                    .map(|mhz| (mhz * 1e6).round() as u64)
+            }
+            "CID" => cid = value.parse().ok(),
+            "LAC" => lac = value.parse().ok(),
+            "MCC" => mcc = value.parse().ok(),
+            "MNC" => mnc = value.parse().ok(),
+            "Pwr" => pwr = value.parse().ok(),
+            _ => {}
+        }
+    }
+    Some(ScannedCell {
+        arfcn: arfcn?,
+        freq_hz: freq_hz?,
+        cid: cid?,
+        lac: lac?,
+        mcc: mcc?,
+        mnc: mnc?,
+        power_db: pwr?,
+    })
+}
+
 impl Radio {
     pub fn kind(&self) -> Kind {
         let d = self.device.to_ascii_lowercase();
@@ -219,6 +279,62 @@ impl Radio {
         die_with_parent(&mut c);
         c.spawn()
             .with_context(|| format!("starting the decoder ({})", decoder.display()))
+    }
+
+    /// True if this device has a power-sweep tool cellcap can drive for its own
+    /// scan. Other devices (UHD, SoapySDR) are scanned with grgsm_scanner.
+    pub fn can_sweep(&self) -> bool {
+        matches!(self.kind(), Kind::RtlSdr | Kind::HackRf)
+    }
+
+    /// Scan a whole band for cells with grgsm_scanner. This works over any
+    /// gr-osmosdr device, including UHD, where there is no power-sweep tool.
+    /// grgsm_scanner does the sweep, decode and cell identification itself.
+    pub fn scan_cells(&self, band_name: &str, samp_rate: u64) -> Result<Vec<ScannedCell>> {
+        let out = std::env::temp_dir().join(format!("cellcap-scan-{}.txt", std::process::id()));
+        let file =
+            std::fs::File::create(&out).with_context(|| format!("creating {}", out.display()))?;
+        let mut c = Command::new("grgsm_scanner");
+        c.arg("-b")
+            .arg(band_name)
+            .arg("--args")
+            .arg(&self.device)
+            .arg("-g")
+            .arg(self.gain.to_string())
+            .arg("-p")
+            .arg(self.ppm.to_string())
+            .arg("-s")
+            .arg(samp_rate.to_string())
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(file))
+            .stderr(if self.verbose {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            });
+        die_with_parent(&mut c);
+        let mut child = c
+            .spawn()
+            .context("starting grgsm_scanner (is gr-gsm installed? Debian: apt install gr-gsm)")?;
+        // A full band scan can take a few minutes.
+        let deadline = Instant::now() + Duration::from_secs(600);
+        let status = loop {
+            if let Some(s) = child.try_wait()? {
+                break s;
+            }
+            if Instant::now() > deadline || crate::stopping() {
+                stop(&mut child);
+                break child.wait()?;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        };
+        let text = std::fs::read_to_string(&out).unwrap_or_default();
+        let _ = std::fs::remove_file(&out);
+        let cells = parse_scanner(&text);
+        if cells.is_empty() && !status.success() && !crate::stopping() {
+            bail!("grgsm_scanner found no cells and exited with {status}; re-run with --verbose-radio (is the SDR attached and free, and does it reach {band_name}?)");
+        }
+        Ok(cells)
     }
 
     /// Measure power across a frequency range with the SDR's own sweep tool.
@@ -406,6 +522,40 @@ mod tests {
         assert_eq!(p[0], (925_012_500.0, -20.5));
         assert_eq!(p[2], (925_062_500.0, 3.5));
         assert_eq!(p[3], (925_112_500.0, -1.0));
+    }
+
+    #[test]
+    fn parses_grgsm_scanner_cells() {
+        // The exact format grgsm_scanner prints (source line 558).
+        let out = "Using avx for something\n\
+            ARFCN:   11, Freq:  937.2M, CID:  1660, LAC:   431, MCC: 238, MNC:   1, Pwr: -34\n\
+            Scanning: 50.00% done..\n\
+            ARFCN: 1016, Freq:  959.8M, CID:  4660, LAC:   431, MCC: 238, MNC:  66, Pwr: -51\n";
+        let cells = parse_scanner(out);
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].arfcn, 11);
+        assert_eq!(cells[0].freq_hz, 937_200_000);
+        assert_eq!(cells[0].cid, 1660);
+        assert_eq!(cells[0].lac, 431);
+        assert_eq!((cells[0].mcc, cells[0].mnc), (238, 1));
+        assert_eq!(cells[0].power_db, -34.0);
+        assert_eq!(cells[1].arfcn, 1016);
+        assert_eq!(cells[1].mnc, 66);
+    }
+
+    #[test]
+    fn can_sweep_only_for_rtl_and_hackrf() {
+        let r = |d: &str| Radio {
+            device: d.into(),
+            gain: 40.0,
+            ppm: 0,
+            port: 47290,
+            verbose: false,
+        };
+        assert!(r("rtl=0").can_sweep());
+        assert!(r("hackrf=0").can_sweep());
+        assert!(!r("uhd").can_sweep());
+        assert!(!r("soapy=0").can_sweep());
     }
 
     #[test]

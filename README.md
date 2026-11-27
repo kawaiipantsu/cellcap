@@ -121,6 +121,22 @@ ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    BROADCAST
 `BROADCAST no` means the channel carries power but no decodable broadcast channel: a
 traffic carrier, or something that is not GSM.
 
+### UHD / USRP (and B210 clones)
+
+A USRP (or a UHD-compatible B210 clone) works as any other device — pass `--device uhd`:
+
+```bash
+cellcap scan --device uhd
+cellcap run  --device uhd --freq 937.2M
+```
+
+RTL-SDR and HackRF are scanned with cellcap's own power sweep (`rtl_power` /
+`hackrf_sweep`). UHD and other devices have no such sweep tool, so `scan` (and the
+auto-pick in `run`) use **`grgsm_scanner`** instead, which does the whole band scan and cell
+identification itself. `run --freq` / `--arfcn` and `decode` pass `--device` straight to
+gr-gsm, so they work on any gr-osmosdr device. A B210's wider bandwidth and 12-bit ADC help
+multi-ARFCN work; the dashboard and pcapng output are the same.
+
 ### Main options of `cellcap run`
 
 | Option | Default | Meaning |
@@ -275,10 +291,29 @@ not publish them. `--drop-paging` leaves these messages out entirely.
 Receiving is passive, but rules on intercepting and storing radio traffic differ by
 country. Check what applies to you before running this continuously.
 
+## Beyond GSM (LTE / 3G / 5G)
+
+cellcap decodes **GSM (2G)**, because that is what gr-gsm does. The other radio
+technologies need different tools, and are honestly out of reach for a passive, low-cost
+setup to varying degrees:
+
+- **LTE (4G):** the broadcast/control plane *can* be looked at passively — tools like
+  srsRAN's cell search, **LTESniffer** and **FALCON** recover the MIB/SIB and PDCCH/DCI, and
+  some export to pcap for Wireshark (which has full LTE RRC/NAS dissectors). This is the most
+  realistic next RAT. cellcap could orchestrate such a tool the same way it drives gr-gsm,
+  but that is a separate project, not built here.
+- **UMTS (3G):** passive decoding is largely infeasible with cheap SDRs (CDMA, closed).
+- **5G NR:** passive decoding is research-grade and not practical today.
+
+So for a mixed network, cellcap covers the 2G side end-to-end; use dedicated LTE tooling for
+4G and treat 3G/5G as spectrum-survey only. A B210-class SDR is a good base for all of this
+because its bandwidth and tuning range suit LTE capture too.
+
 ## Limits
 
 - GSM only for now. The layout leaves room for other sources.
-- An RTL-SDR with an R820T tuner cannot reach the 1800 MHz downlink band.
+- An RTL-SDR with an R820T tuner cannot reach the 1800 MHz downlink band; a HackRF or
+  UHD/B210 does.
 - The scan needs `rtl_power` or `hackrf_sweep`; other SDRs must be given `--freq`.
 - **No GPRS/PDTCH decode:** this gr-gsm has no packet-data demapper.
 - **Frequency-hopping traffic channels are not dehopped** — `decode` works on one fixed
