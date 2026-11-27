@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cellcap — Field Guide to Passive Cellular Capture &amp; Analysis</title>
+<meta name="author" content="THUGSred">
+<meta name="description" content="A complete training manual for passive cellular (GSM/GPRS/LTE/3G/5G) capture and analysis with cellcap, an SDR and Wireshark — for beginners, intermediate and professionals.">
+<meta name="keywords" content="cellcap, GSM, GSMTAP, SDR, Wireshark, LTE, gr-gsm, IMSI, paging, cellular, THUGSred">
+<style>
+  :root{
+    --ink:#1a1c23; --muted:#5a6072; --faint:#8a90a0; --line:#d9dce4;
+    --accent:#e4384f; --accent-dark:#b3283b; --bg-soft:#f6f7f9; --code-bg:#f2f3f6;
+    --blue:#2f6fed; --green:#1f9d57; --amber:#d98a00; --violet:#7b4fd0;
+  }
+  @page{
+    size:A4; margin:22mm 18mm 20mm 18mm;
+    @top-left{ content:"cellcap · Field Guide"; font:600 8pt 'DejaVu Sans',sans-serif; color:#9aa0b0; }
+    @top-right{ content:"THUGSred · thugs.red"; font:8pt 'DejaVu Sans',sans-serif; color:#9aa0b0; }
+    @bottom-center{ content:counter(page) " / " counter(pages); font:8pt 'DejaVu Sans',sans-serif; color:#9aa0b0; }
+    @bottom-left{ content:""; }
+  }
+  @page cover{ margin:0; @top-left{content:""} @top-right{content:""} @bottom-center{content:""} }
+  @page nochrome{ @top-left{content:""} @top-right{content:""} }
+
+  html{ font-size:10.3pt; }
+  body{ font-family:'DejaVu Sans','Liberation Sans',sans-serif; color:var(--ink); line-height:1.5; }
+  h1,h2,h3,h4{ font-family:'DejaVu Sans',sans-serif; line-height:1.2; color:#15171d; }
+  h1{ font-size:21pt; margin:0 0 4pt; bookmark-level:1; }
+  h2{ font-size:15.5pt; margin:20pt 0 6pt; bookmark-level:2; border-bottom:2px solid var(--accent); padding-bottom:3pt; }
+  h3{ font-size:12pt; margin:14pt 0 4pt; color:var(--accent-dark); bookmark-level:3; }
+  h4{ font-size:10.5pt; margin:10pt 0 3pt; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  p{ margin:0 0 7pt; }
+  a{ color:var(--blue); text-decoration:none; }
+  code,kbd{ font-family:'DejaVu Sans Mono',monospace; font-size:.88em; background:var(--code-bg); padding:.5pt 3pt; border-radius:3px; }
+  strong{ color:#000; }
+  small{ color:var(--muted); }
+  ul,ol{ margin:0 0 7pt; padding-left:16pt; }
+  li{ margin:1.5pt 0; }
+
+  /* Parts and chapters */
+  .part{ page-break-before:always; page:nochrome; }
+  .part-band{ background:linear-gradient(100deg,var(--accent),var(--accent-dark)); color:#fff; border-radius:10px; padding:26pt 24pt; margin:40pt 0 8pt; }
+  .part-band .k{ font:700 9pt 'DejaVu Sans',sans-serif; letter-spacing:.22em; opacity:.85; }
+  .part-band h1{ color:#fff; font-size:27pt; margin:6pt 0 0; }
+  .part-band p{ margin:8pt 0 0; opacity:.95; font-size:11pt; }
+  .chapter{ page-break-before:always; }
+  .chapter h2{ margin-top:0; }
+  .chno{ color:var(--accent); font-weight:700; }
+
+  /* Code */
+  pre{ background:var(--code-bg); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:5px;
+       padding:9pt 11pt; font-family:'DejaVu Sans Mono',monospace; font-size:8.3pt; line-height:1.45; overflow-wrap:anywhere;
+       white-space:pre-wrap; margin:0 0 9pt; }
+  pre .c{ color:#8a90a0; }       /* comment */
+  pre .k{ color:var(--accent-dark); font-weight:700; }
+  pre .s{ color:#1f9d57; }
+
+  /* Tables */
+  table{ border-collapse:collapse; width:100%; margin:4pt 0 10pt; font-size:8.8pt; }
+  th,td{ border:1px solid var(--line); padding:4pt 6pt; text-align:left; vertical-align:top; }
+  th{ background:#eef0f4; font-size:8.3pt; text-transform:uppercase; letter-spacing:.03em; color:#3a4150; }
+  tbody tr:nth-child(even){ background:var(--bg-soft); }
+  td code{ background:none; padding:0; }
+
+  /* Callouts */
+  .box{ border-radius:6px; padding:9pt 12pt 9pt 13pt; margin:4pt 0 10pt; border:1px solid var(--line); border-left-width:4px; background:var(--bg-soft); font-size:9.4pt; page-break-inside:avoid; }
+  .box .t{ font-weight:700; display:block; margin-bottom:3pt; font-size:9pt; letter-spacing:.02em; }
+  .box.note{ border-left-color:var(--blue); } .box.note .t{ color:var(--blue); }
+  .box.warn{ border-left-color:var(--amber); background:#fff8ec; } .box.warn .t{ color:var(--amber); }
+  .box.exec{ border-left-color:var(--violet); background:#f7f4fd; } .box.exec .t{ color:var(--violet); }
+  .box.pro{ border-left-color:var(--green); background:#f1faf4; } .box.pro .t{ color:var(--green); }
+  .box.danger{ border-left-color:var(--accent); background:#fdf1f3; } .box.danger .t{ color:var(--accent-dark); }
+
+  /* Track badges */
+  .track{ display:inline-block; font:700 7pt 'DejaVu Sans',sans-serif; padding:1pt 5pt; border-radius:8px; color:#fff; vertical-align:middle; }
+  .t-b{ background:var(--green); } .t-i{ background:var(--amber); } .t-p{ background:var(--accent); }
+
+  /* Figures */
+  figure{ margin:6pt 0 12pt; text-align:center; page-break-inside:avoid; }
+  figure img{ max-width:100%; border:1px solid var(--line); border-radius:6px; }
+  figure svg{ max-width:100%; height:auto; }
+  figcaption{ font-size:8.3pt; color:var(--muted); margin-top:4pt; font-style:italic; }
+  .fignum{ font-style:normal; font-weight:700; color:var(--accent-dark); }
+
+  /* Cover */
+  .cover{ page:cover; page-break-after:always; height:297mm; position:relative; color:#fff;
+    background:radial-gradient(1200px 500px at 70% -10%, #3a1016 0%, #16171d 42%, #0d0e12 100%); }
+  .cover .pad{ position:absolute; inset:0; padding:30mm 24mm; display:flex; flex-direction:column; }
+  .cover .brand{ font:800 15pt 'DejaVu Sans',sans-serif; letter-spacing:.02em; }
+  .cover .brand .dot{ color:var(--accent); }
+  .cover h1{ color:#fff; font-size:38pt; line-height:1.05; margin:auto 0 0; }
+  .cover .sub{ font-size:14pt; color:#c7cad4; margin:10pt 0 0; max-width:150mm; }
+  .cover .tracks{ margin:22pt 0 0; font-size:10pt; color:#aeb3c0; }
+  .cover .meta{ margin-top:16pt; font-size:9.5pt; color:#8a90a0; border-top:1px solid #2a2d36; padding-top:10pt; }
+  .cover .rule{ width:60mm; height:4px; background:var(--accent); border-radius:2px; margin:0 0 14pt; }
+
+  /* TOC */
+  .toc{ page-break-after:always; }
+  .toc h2{ border:0; }
+  .toc ul{ list-style:none; padding:0; margin:0; font-size:9.6pt; }
+  .toc .p{ font-weight:700; color:var(--accent-dark); margin-top:9pt; text-transform:uppercase; letter-spacing:.04em; font-size:8.6pt; }
+  .toc li.ch{ margin:2.5pt 0; }
+  .toc a{ color:var(--ink); }
+  .toc a::after{ content:leader('. ') target-counter(attr(href), page); color:var(--faint); font-variant-numeric:tabular-nums; }
+
+  .lede{ font-size:11pt; color:var(--muted); }
+  .kbd{ font-family:'DejaVu Sans Mono',monospace; background:#eceef3; border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:0 4pt; font-size:.85em; }
+  .svg-wrap{ background:#fff; }
+  .hexline{ font-family:'DejaVu Sans Mono',monospace; font-size:8.2pt; }
+</style>
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<section class="cover"><div class="pad">
+  <div class="brand">THUGS<span class="dot">red</span></div>
+  <h1>cellcap</h1>
+  <div style="margin-top:4pt"></div>
+  <div class="rule" style="margin-top:14pt"></div>
+  <div class="sub"><strong style="color:#fff">A Field Guide to Passive Cellular Capture &amp; Analysis</strong><br>
+  Capturing, decoding and understanding GSM / GPRS / LTE radio with a software-defined radio, cellcap and Wireshark.</div>
+  <div class="tracks">A complete training manual for &nbsp;<span style="color:#1f9d57">● Beginners</span> &nbsp; <span style="color:#d98a00">● Intermediate</span> &nbsp; <span style="color:#e4384f">● Professionals</span></div>
+  <div class="meta">
+    Document version 1.0 · generated for cellcap v1.2.0 · <span id="coverdate">2026-11-27</span><br>
+    © 2026 THUGSred · https://thugs.red · cellcap is MIT-licensed · This guide is for authorised, lawful use only — see the Disclaimer.
+  </div>
+</div></section>
+
+<!-- ============================== HOW TO USE ============================== -->
+<section class="chapter" style="page-break-before:avoid">
+  <h2 style="margin-top:6pt">How to use this guide</h2>
+  <p class="lede">This book takes you from “what is a cell tower” to reading live signalling off the air and validating it in Wireshark. You do not need to read it front to back — follow the track that fits you.</p>
+  <table>
+    <thead><tr><th style="width:26%">Track</th><th>Read this for…</th><th style="width:30%">Start at</th></tr></thead>
+    <tbody>
+      <tr><td><span class="track t-b">BEGINNER</span></td><td>The big picture, plain-language analogies, how the tools fit together, your first capture.</td><td>Part I &amp; the Executive Summary, then Ch. 10–13.</td></tr>
+      <tr><td><span class="track t-i">INTERMEDIATE</span></td><td>Reading channels and message types, flow chains, Wireshark filters, the SIM tools.</td><td>Part IV &amp; Part V.</td></tr>
+      <tr><td><span class="track t-p">PRO</span></td><td>Deep packet dissection, security/attacks, multi-RAT (LTE/3G/5G), standards references.</td><td>Part IV, VI &amp; VII, Appendices.</td></tr>
+    </tbody>
+  </table>
+  <p>Throughout, a badge marks the depth of a section — <span class="track t-b">B</span> foundational, <span class="track t-i">I</span> hands-on, <span class="track t-p">P</span> advanced — and coloured boxes flag things worth stopping for:</p>
+  <div class="box note"><span class="t">▶ Note</span> A useful clarification or detail.</div>
+  <div class="box pro"><span class="t">▲ Pro tip</span> A technique or shortcut the professionals use.</div>
+  <div class="box exec"><span class="t">◆ In human terms</span> The same idea explained as you would to an executive or a non-engineer.</div>
+  <div class="box warn"><span class="t">⚠ Caution</span> A common mistake, or a safety/accuracy caveat.</div>
+  <div class="box danger"><span class="t">■ Law &amp; ethics</span> Something you must get right before you transmit — or in this case, receive.</div>
+  <div class="box danger"><span class="t">■ Read first</span> cellcap is a <strong>receive-only</strong> tool, but receiving, recording and decoding cellular traffic is regulated and in many countries unlawful without authorisation. Everything in this guide assumes you are working on a network you own or are explicitly authorised to test. See <a href="#ch-legal">Chapter 32</a>.</div>
+</section>
+
+<!-- ============================== TOC ============================== -->
+<section class="toc">
+  <h2>Contents</h2>
+  <ul>
+    <li class="p">Part I — Foundations</li>
+    <li class="ch"><a href="#ch-exec">1 · Executive summary — cellular in human terms</a></li>
+    <li class="ch"><a href="#ch-gens">2 · The generations: 2G, 3G, 4G, 5G</a></li>
+    <li class="ch"><a href="#ch-arch">3 · How a mobile network is built</a></li>
+    <li class="ch"><a href="#ch-ids">4 · Identities: IMSI, TMSI, IMEI and friends</a></li>
+    <li class="ch"><a href="#ch-air">5 · The GSM air interface: ARFCN, timeslots, channels</a></li>
+    <li class="ch"><a href="#ch-stack">6 · The protocol stack and GSMTAP</a></li>
+
+    <li class="p">Part II — The toolchain</li>
+    <li class="ch"><a href="#ch-what">7 · What cellcap is (and is not)</a></li>
+    <li class="ch"><a href="#ch-hw">8 · Hardware: choosing an SDR</a></li>
+    <li class="ch"><a href="#ch-sw">9 · Software and installation</a></li>
+    <li class="ch"><a href="#ch-check">10 · Preflight: <code>cellcap check</code></a></li>
+
+    <li class="p">Part III — Using cellcap</li>
+    <li class="ch"><a href="#ch-panel">11 · The interactive control panel</a></li>
+    <li class="ch"><a href="#ch-scan">12 · Scanning for cells</a></li>
+    <li class="ch"><a href="#ch-run">13 · Capturing and the live dashboard</a></li>
+    <li class="ch"><a href="#ch-udp">14 · Live remote Wireshark over UDP</a></li>
+    <li class="ch"><a href="#ch-decode">15 · Decoding dedicated &amp; ciphered channels</a></li>
+    <li class="ch"><a href="#ch-sim">16 · SIM tools: keys, identities, audit</a></li>
+    <li class="ch"><a href="#ch-inspect">17 · Inspecting captures &amp; the service</a></li>
+
+    <li class="p">Part IV — Reading the air</li>
+    <li class="ch"><a href="#ch-gsmtap">18 · GSMTAP dissected</a></li>
+    <li class="ch"><a href="#ch-channels">19 · The logical channels explained</a></li>
+    <li class="ch"><a href="#ch-dict">20 · Message dictionary</a></li>
+    <li class="ch"><a href="#ch-worked">21 · Worked example: the roaming paging</a></li>
+    <li class="ch"><a href="#ch-flows">22 · Flow chains: call, SMS, location update</a></li>
+
+    <li class="p">Part V — Wireshark</li>
+    <li class="ch"><a href="#ch-ws">23 · Wireshark for cellular</a></li>
+    <li class="ch"><a href="#ch-filters">24 · The display-filter cookbook</a></li>
+
+    <li class="p">Part VI — Security, privacy &amp; law</li>
+    <li class="ch"><a href="#ch-crypto">25 · Ciphering: A5, Kc and Ki</a></li>
+    <li class="ch"><a href="#ch-imsicatch">26 · IMSI catchers and how to spot them</a></li>
+    <li class="ch"><a href="#ch-simsec">27 · The SIM/UICC attack surface</a></li>
+    <li class="ch" id="toc-legal"><a href="#ch-legal">28 · Privacy, personal data and the law</a></li>
+
+    <li class="p">Part VII — Beyond GSM</li>
+    <li class="ch"><a href="#ch-lte">29 · LTE (4G)</a></li>
+    <li class="ch"><a href="#ch-3g">30 · 3G (UMTS) and why passive is hard</a></li>
+    <li class="ch"><a href="#ch-5g">31 · 5G (NR)</a></li>
+
+    <li class="p">Appendices</li>
+    <li class="ch"><a href="#ap-glossary">A · Glossary</a></li>
+    <li class="ch"><a href="#ap-msgref">B · Message-type quick reference</a></li>
+    <li class="ch"><a href="#ap-cheat">C · cellcap command cheat sheet</a></li>
+    <li class="ch"><a href="#ap-refs">D · Standards, tools &amp; further reading</a></li>
+    <li class="ch"><a href="#ap-disclaimer">E · Full disclaimer</a></li>
+  </ul>
+</section>
+<!-- ==================================================================== -->
+<!-- PART I                                                               -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">PART I</div><h1>Foundations</h1>
+  <p>What a mobile network is, how it is built, and the language — identities, channels, messages — you need before a single byte makes sense.</p>
+</div></section>
+
+<!-- Ch 1 -->
+<section class="chapter" id="ch-exec">
+  <h2><span class="chno">1</span> · Executive summary — cellular in human terms <span class="track t-b">B</span></h2>
+  <p class="lede">If you only read one page, read this one.</p>
+
+  <p>Every mobile phone is a two-way radio. To stay reachable, it constantly listens to nearby <strong>cell towers</strong>, which never stop broadcasting a kind of public notice-board: “this is network X, here is how to talk to me, and here is a list of phones I’m trying to reach right now.” <strong>cellcap</strong> is a tool that listens to that notice-board with an inexpensive radio and writes down what it hears, so you can open it later in <strong>Wireshark</strong> — the standard tool network engineers use to inspect traffic — and study it.</p>
+
+  <div class="box exec"><span class="t">◆ In human terms (for an executive)</span>
+  Think of a cell tower as a station announcer in a train terminal, calling out names over the loudspeaker: “Passenger 232-01-… to platform 3.” cellcap is a microphone and notebook: it records the announcements. It <strong>cannot</strong> make announcements (it never transmits), it cannot hear what passengers whisper back (it only receives the tower’s side), and when the announcer switches to a private code (encryption) it can only note that a private conversation happened. The value is in <em>seeing your own network the way a phone sees it</em>: is coverage healthy, are the right messages going out, is anything misconfigured or hostile nearby?</div>
+
+  <h3>What you can and cannot see</h3>
+  <table>
+    <thead><tr><th>You can see (downlink, in the clear)</th><th>You cannot see (without more)</th></tr></thead>
+    <tbody>
+      <tr><td>The network’s <strong>identity</strong> and configuration (operator, area, cell, neighbour list).</td><td>What <strong>phones send</strong> (uplink) — cellcap receives only the tower’s downlink.</td></tr>
+      <tr><td><strong>Paging</strong>: which phones are being reached (by temporary or, sometimes, permanent ID).</td><td><strong>Encrypted</strong> voice/data once ciphering starts — unless you hold the session key.</td></tr>
+      <tr><td><strong>Channel grants</strong> (who is told to move to a private channel).</td><td><strong>Call content</strong> or the <strong>words</strong> of an SMS on a normal network.</td></tr>
+      <tr><td>Early signalling on a combined control channel: location updates, authentication challenges, ciphering commands.</td><td>Traffic that <strong>frequency-hops</strong> across many channels at once (not dehopped here).</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box danger"><span class="t">■ The one rule</span> Receiving is passive, but it is still regulated. Only ever point cellcap at a network you own or are <strong>explicitly authorised</strong> to test. A recording can contain other people’s identifiers — that is personal data. See <a href="#ch-legal">Chapter 28</a>.</div>
+
+  <h3>The shape of the rest of this book</h3>
+  <p>Part I teaches the vocabulary. Part II sets up the tools. Part III drives cellcap. Part IV — the heart — teaches you to <em>read</em> what comes off the air, message by message. Part V is Wireshark. Part VI covers security, privacy and law. Part VII looks beyond 2G to LTE, 3G and 5G. The appendices are a glossary, a message dictionary, a command cheat-sheet and a full reference list.</p>
+</section>
+
+<!-- Ch 2 -->
+<section class="chapter" id="ch-gens">
+  <h2><span class="chno">2</span> · The generations: 2G, 3G, 4G, 5G <span class="track t-b">B</span></h2>
+  <p>“G” means <em>generation</em>. Each is a different radio technology; they coexist, and a phone drops to an older one when a newer one is unavailable. cellcap decodes <strong>2G (GSM)</strong> natively and orchestrates other tools for <strong>4G (LTE)</strong>; 3G and 5G are covered in Part VII.</p>
+
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 760 180" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif">
+    <line x1="30" y1="60" x2="730" y2="60" stroke="#d9dce4" stroke-width="3"/>
+    <!-- nodes -->
+    <g text-anchor="middle">
+      <g><circle cx="90" cy="60" r="9" fill="#e4384f"/><text x="90" y="40" font-size="13" font-weight="700">2G</text><text x="90" y="86" font-size="9" fill="#5a6072">GSM · 1991</text><text x="90" y="99" font-size="8" fill="#8a90a0">voice, SMS</text><text x="90" y="112" font-size="8" fill="#8a90a0">+GPRS/EDGE data</text></g>
+      <g><circle cx="235" cy="60" r="9" fill="#d98a00"/><text x="235" y="40" font-size="13" font-weight="700">3G</text><text x="235" y="86" font-size="9" fill="#5a6072">UMTS · 2001</text><text x="235" y="99" font-size="8" fill="#8a90a0">WCDMA</text><text x="235" y="112" font-size="8" fill="#8a90a0">Mbit/s data</text></g>
+      <g><circle cx="400" cy="60" r="9" fill="#2f6fed"/><text x="400" y="40" font-size="13" font-weight="700">4G</text><text x="400" y="86" font-size="9" fill="#5a6072">LTE · 2009</text><text x="400" y="99" font-size="8" fill="#8a90a0">OFDMA, all-IP</text><text x="400" y="112" font-size="8" fill="#8a90a0">10s–100s Mbit/s</text></g>
+      <g><circle cx="565" cy="60" r="9" fill="#1f9d57"/><text x="565" y="40" font-size="13" font-weight="700">5G</text><text x="565" y="86" font-size="9" fill="#5a6072">NR · 2019</text><text x="565" y="99" font-size="8" fill="#8a90a0">sub-6 &amp; mmWave</text><text x="565" y="112" font-size="8" fill="#8a90a0">Gbit/s, low latency</text></g>
+      <g><circle cx="700" cy="60" r="7" fill="#7b4fd0"/><text x="700" y="40" font-size="11" font-weight="700">6G</text><text x="700" y="86" font-size="8" fill="#8a90a0">research</text></g>
+    </g>
+    <g text-anchor="middle" font-size="8" fill="#e4384f" font-weight="700">
+      <text x="162" y="150">cellcap: native</text>
+      <rect x="55" y="158" width="150" height="6" rx="3" fill="#e4384f" opacity=".25"/>
+      <text x="400" y="150">cellcap: via LTESniffer</text>
+      <rect x="330" y="158" width="150" height="6" rx="3" fill="#2f6fed" opacity=".25"/>
+    </g>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 2.1</span> The cellular generations, with where cellcap fits.</figcaption></figure>
+
+  <table>
+    <thead><tr><th>Gen</th><th>Name</th><th>Air interface</th><th>Carries</th><th>Passive capture reality</th></tr></thead>
+    <tbody>
+      <tr><td>2G</td><td>GSM</td><td>TDMA/FDMA, GMSK</td><td>Voice, SMS; data via GPRS/EDGE</td><td><strong>Fully practical</strong> — this guide’s focus.</td></tr>
+      <tr><td>3G</td><td>UMTS</td><td>WCDMA (code division)</td><td>Voice + Mbit/s data</td><td>Impractical passively (spread spectrum). <a href="#ch-3g">Ch 30</a>.</td></tr>
+      <tr><td>4G</td><td>LTE</td><td>OFDMA, all-IP</td><td>Data (VoLTE for voice)</td><td>Downlink control plane <strong>is</strong> reachable (LTESniffer). <a href="#ch-lte">Ch 29</a>.</td></tr>
+      <tr><td>5G</td><td>NR</td><td>OFDMA, flexible numerology</td><td>Everything, faster</td><td>Research-grade, file-first. <a href="#ch-5g">Ch 31</a>.</td></tr>
+    </tbody>
+  </table>
+  <div class="box note"><span class="t">▶ Note</span> “2.5G” (GPRS) and “2.75G” (EDGE) are packet-data add-ons bolted onto GSM; “LTE-Advanced” and “5G NSA/SA” are refinements within 4G/5G. The control-plane concepts — identities, paging, channels — rhyme across all of them, which is why learning GSM first pays off everywhere.</div>
+</section>
+
+<!-- Ch 3 -->
+<section class="chapter" id="ch-arch">
+  <h2><span class="chno">3</span> · How a mobile network is built <span class="track t-b">B</span></h2>
+  <p>A GSM network is a chain from the phone in your hand to the databases that know who you are. Understanding the boxes tells you <em>which</em> box is talking when you see a message.</p>
+
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="9">
+    <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5a6072"/></marker></defs>
+    <!-- MS -->
+    <rect x="20" y="110" width="90" height="46" rx="6" fill="#fff" stroke="#e4384f" stroke-width="2"/>
+    <text x="65" y="130" text-anchor="middle" font-weight="700">MS</text>
+    <text x="65" y="145" text-anchor="middle" font-size="8" fill="#5a6072">phone + SIM</text>
+    <!-- air -->
+    <text x="150" y="120" text-anchor="middle" font-size="8" fill="#e4384f" font-weight="700">air (Um)</text>
+    <text x="150" y="132" text-anchor="middle" font-size="7.5" fill="#e4384f">← cellcap listens here</text>
+    <line x1="112" y1="133" x2="190" y2="133" stroke="#e4384f" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+    <!-- BTS -->
+    <rect x="195" y="110" width="80" height="46" rx="6" fill="#fff" stroke="#d9dce4" stroke-width="1.5"/>
+    <text x="235" y="130" text-anchor="middle" font-weight="700">BTS</text>
+    <text x="235" y="145" text-anchor="middle" font-size="8" fill="#5a6072">tower</text>
+    <!-- BSC -->
+    <rect x="300" y="110" width="80" height="46" rx="6" fill="#fff" stroke="#d9dce4" stroke-width="1.5"/>
+    <text x="340" y="130" text-anchor="middle" font-weight="700">BSC</text>
+    <text x="340" y="145" text-anchor="middle" font-size="8" fill="#5a6072">controller</text>
+    <!-- MSC/VLR -->
+    <rect x="405" y="70" width="95" height="46" rx="6" fill="#fff" stroke="#d9dce4" stroke-width="1.5"/>
+    <text x="452" y="90" text-anchor="middle" font-weight="700">MSC / VLR</text>
+    <text x="452" y="105" text-anchor="middle" font-size="8" fill="#5a6072">voice switch</text>
+    <!-- HLR -->
+    <rect x="525" y="70" width="95" height="46" rx="6" fill="#f7f4fd" stroke="#7b4fd0" stroke-width="1.5"/>
+    <text x="572" y="90" text-anchor="middle" font-weight="700" fill="#7b4fd0">HLR / AuC</text>
+    <text x="572" y="105" text-anchor="middle" font-size="8" fill="#5a6072">subscriber DB</text>
+    <!-- SGSN/GGSN -->
+    <rect x="405" y="150" width="95" height="46" rx="6" fill="#eef6ff" stroke="#2f6fed" stroke-width="1.5"/>
+    <text x="452" y="170" text-anchor="middle" font-weight="700" fill="#2f6fed">SGSN / GGSN</text>
+    <text x="452" y="185" text-anchor="middle" font-size="8" fill="#5a6072">GPRS data</text>
+    <rect x="645" y="150" width="90" height="46" rx="6" fill="#fff" stroke="#d9dce4" stroke-width="1.5"/>
+    <text x="690" y="175" text-anchor="middle" font-weight="700">Internet</text>
+    <!-- lines -->
+    <line x1="277" y1="133" x2="298" y2="133" stroke="#5a6072" marker-end="url(#ar)"/>
+    <line x1="382" y1="128" x2="403" y2="100" stroke="#5a6072" marker-end="url(#ar)"/>
+    <line x1="382" y1="138" x2="403" y2="168" stroke="#2f6fed" marker-end="url(#ar)"/>
+    <line x1="502" y1="93" x2="523" y2="93" stroke="#5a6072" marker-end="url(#ar)"/>
+    <line x1="502" y1="173" x2="643" y2="173" stroke="#2f6fed" marker-end="url(#ar)"/>
+    <!-- labels -->
+    <text x="235" y="230" text-anchor="middle" font-size="8" fill="#8a90a0">Radio side (BSS)</text>
+    <line x1="195" y1="205" x2="380" y2="205" stroke="#d9dce4"/>
+    <text x="520" y="230" text-anchor="middle" font-size="8" fill="#8a90a0">Core network (NSS)</text>
+    <line x1="405" y1="205" x2="635" y2="205" stroke="#d9dce4"/>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 3.1</span> GSM architecture. The radio side (BSS) handles the air; the core (NSS) handles switching, subscriber data and authentication. GPRS adds the SGSN/GGSN data path (blue).</figcaption></figure>
+
+  <table>
+    <thead><tr><th>Box</th><th>Full name</th><th>Job (in plain terms)</th></tr></thead>
+    <tbody>
+      <tr><td><strong>MS</strong></td><td>Mobile Station</td><td>The phone (ME, Mobile Equipment) plus the SIM card that proves who you are.</td></tr>
+      <tr><td><strong>BTS</strong></td><td>Base Transceiver Station</td><td>The tower/radio. What you actually receive over the air (the <strong>Um</strong> interface).</td></tr>
+      <tr><td><strong>BSC</strong></td><td>Base Station Controller</td><td>Manages many BTSs — channels, handovers.</td></tr>
+      <tr><td><strong>MSC</strong></td><td>Mobile Switching Centre</td><td>Connects calls; the telephone exchange of the mobile world.</td></tr>
+      <tr><td><strong>VLR</strong></td><td>Visitor Location Register</td><td>Temporary record of who is in this area right now (hands out TMSIs).</td></tr>
+      <tr><td><strong>HLR</strong></td><td>Home Location Register</td><td>The master database of all the operator’s subscribers.</td></tr>
+      <tr><td><strong>AuC</strong></td><td>Authentication Centre</td><td>Holds the secret key (Ki) per SIM; produces the challenges that prove a SIM is genuine.</td></tr>
+      <tr><td><strong>SGSN/GGSN</strong></td><td>Serving / Gateway GPRS Support Node</td><td>The packet-data path to the internet (GPRS/EDGE).</td></tr>
+    </tbody>
+  </table>
+  <div class="box note"><span class="t">▶ Note</span> In LTE the names change — the tower is an <strong>eNodeB</strong>, the core is the <strong>EPC</strong> (MME, S-GW, P-GW, HSS) — but the roles map almost one-to-one. In 5G it is the <strong>gNodeB</strong> and the <strong>5GC</strong>.</div>
+</section>
+
+<!-- Ch 4 -->
+<section class="chapter" id="ch-ids">
+  <h2><span class="chno">4</span> · Identities: IMSI, TMSI, IMEI and friends <span class="track t-b">B</span> <span class="track t-i">I</span></h2>
+  <p>Cellular networks are obsessed with identity. Knowing the identifiers — and which are permanent, which temporary, which personal — is the single most useful thing when reading captures, and it is central to both privacy and attacks.</p>
+
+  <table>
+    <thead><tr><th>ID</th><th>Stands for</th><th>What it identifies</th><th>Lifetime</th><th>Seen on the air?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>IMSI</strong></td><td>International Mobile Subscriber Identity</td><td>The <strong>SIM</strong> (the subscriber) — MCC+MNC+MSIN, up to 15 digits</td><td>Permanent</td><td>Rarely, and only when unavoidable. Sensitive.</td></tr>
+      <tr><td><strong>TMSI</strong></td><td>Temporary Mobile Subscriber Identity</td><td>A short-lived stand-in for the IMSI in one area</td><td>Minutes–hours</td><td>Routinely (this is the point of it).</td></tr>
+      <tr><td><strong>IMEI</strong></td><td>International Mobile Equipment Identity</td><td>The <strong>handset</strong> hardware</td><td>Permanent</td><td>On request (Identity Request).</td></tr>
+      <tr><td><strong>IMEISV</strong></td><td>IMEI + Software Version</td><td>Handset + firmware</td><td>Permanent</td><td>On request.</td></tr>
+      <tr><td><strong>MSISDN</strong></td><td>the phone <strong>number</strong></td><td>The subscription’s dialable number</td><td>Semi-permanent</td><td>No (lives in the core, not the air).</td></tr>
+      <tr><td><strong>LAI</strong></td><td>Location Area Identity</td><td>MCC+MNC+LAC — the area a phone is registered in</td><td>Config</td><td>Yes (System Information, LU Accept).</td></tr>
+      <tr><td><strong>CGI</strong></td><td>Cell Global Identity</td><td>LAI + Cell ID — the exact cell</td><td>Config</td><td>Yes (System Information 3).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Reading an IMSI</h3>
+  <p>An IMSI is just digits with structure. The first three are the country (<strong>MCC</strong>), the next two or three the operator (<strong>MNC</strong>), the rest the subscriber (<strong>MSIN</strong>). cellcap resolves the MCC/MNC to a name with its built-in E.212 table — but the mapping is the same one Wireshark and the ITU use.</p>
+
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 700 150" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans Mono, monospace">
+    <g font-size="22" text-anchor="middle">
+      <rect x="40"  y="40" width="150" height="44" rx="6" fill="#fdecef" stroke="#e4384f"/>
+      <text x="115" y="70" fill="#b3283b" font-weight="700">232</text>
+      <rect x="200" y="40" width="110" height="44" rx="6" fill="#eef6ff" stroke="#2f6fed"/>
+      <text x="255" y="70" fill="#2f6fed" font-weight="700">01</text>
+      <rect x="320" y="40" width="340" height="44" rx="6" fill="#f6f7f9" stroke="#8a90a0"/>
+      <text x="490" y="70" fill="#8a90a0" font-weight="700">6909 588 19x</text>
+    </g>
+    <g font-family="DejaVu Sans, sans-serif" font-size="9" text-anchor="middle" fill="#5a6072">
+      <text x="115" y="104" font-weight="700" fill="#b3283b">MCC</text><text x="115" y="118">country = Austria</text>
+      <text x="255" y="104" font-weight="700" fill="#2f6fed">MNC</text><text x="255" y="118">operator = A1 Telekom</text>
+      <text x="490" y="104" font-weight="700" fill="#5a6072">MSIN</text><text x="490" y="118">subscriber (sensitive — redacted)</text>
+    </g>
+    <text x="350" y="20" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="9" fill="#8a90a0">Worked example from a live capture (see Chapter 21)</text>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 4.1</span> Structure of an IMSI. <code>232 / 01</code> = Austria / A1 Telekom — so this SIM is an Austrian A1 subscriber, here seen roaming on a Danish network.</figcaption></figure>
+
+  <div class="box exec"><span class="t">◆ In human terms</span> The <strong>IMSI</strong> is your passport number — permanent, unique, something you reveal as rarely as possible. The <strong>TMSI</strong> is a cloakroom ticket the network hands you on arrival so it can refer to you without shouting your passport number across the room. The <strong>IMEI</strong> is the serial number stamped on the phone itself, independent of who owns it. When a network shouts an IMSI out loud instead of a TMSI, that is unusual and worth noticing.</div>
+  <div class="box pro"><span class="t">▲ Pro tip</span> Pure-IMSI paging (no TMSI) often means the network has no valid TMSI for that subscriber yet — classic for a <strong>fresh roamer</strong> that just attached. A sudden burst of IMSI paging or unsolicited <em>Identity Request (IMSI)</em> messages, on the other hand, is a hallmark of an <strong>IMSI catcher</strong> (Chapter 26).</div>
+</section>
+
+<!-- Ch 5 -->
+<section class="chapter" id="ch-air">
+  <h2><span class="chno">5</span> · The GSM air interface: ARFCN, timeslots, channels <span class="track t-i">I</span></h2>
+  <p>GSM divides the radio spectrum two ways at once: by <strong>frequency</strong> (FDMA) and by <strong>time</strong> (TDMA). On top of that physical grid sit <strong>logical channels</strong> — named streams for different jobs. This is the grid cellcap tunes into.</p>
+
+  <h3>Frequency — the ARFCN</h3>
+  <p>Each 200&nbsp;kHz radio channel has a number, the <strong>ARFCN</strong> (Absolute Radio-Frequency Channel Number). “ARFCN 11” in band GSM900 is 937.2&nbsp;MHz downlink. The ARFCN is <em>not</em> the operator — any operator can use any channel; who owns it is announced in the broadcast (Chapter 4).</p>
+  <table>
+    <thead><tr><th>Band</th><th>Downlink (what cellcap receives)</th><th>ARFCNs</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>GSM&nbsp;900</td><td>935–960 MHz</td><td>1–124</td><td>Most common in EU; an RTL-SDR reaches this.</td></tr>
+      <tr><td>GSM&nbsp;850</td><td>869–894 MHz</td><td>128–251</td><td>Americas.</td></tr>
+      <tr><td>DCS&nbsp;1800</td><td>1805–1880 MHz</td><td>512–885</td><td>Needs a tuner that reaches 1.8 GHz (not all RTLs).</td></tr>
+      <tr><td>PCS&nbsp;1900</td><td>1930–1990 MHz</td><td>512–810</td><td>Americas.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Time — the TDMA frame</h3>
+  <p>Each carrier is sliced into <strong>8 timeslots</strong> (0–7), repeating ~217 times a second. One timeslot’s worth of bits is a <strong>burst</strong>. A given logical channel uses a particular timeslot in a repeating pattern.</p>
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 700 110" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="9">
+    <text x="10" y="30" font-size="9" fill="#5a6072">1 TDMA frame ≈ 4.615 ms</text>
+    <g>
+      <rect x="10" y="40" width="85" height="34" fill="#fdecef" stroke="#e4384f"/><text x="52" y="61" text-anchor="middle" font-weight="700">TS0</text>
+      <rect x="95" y="40" width="85" height="34" fill="#fff" stroke="#d9dce4"/><text x="137" y="61" text-anchor="middle">TS1</text>
+      <rect x="180" y="40" width="85" height="34" fill="#fff" stroke="#d9dce4"/><text x="222" y="61" text-anchor="middle">TS2</text>
+      <rect x="265" y="40" width="85" height="34" fill="#fff" stroke="#d9dce4"/><text x="307" y="61" text-anchor="middle">TS3</text>
+      <rect x="350" y="40" width="85" height="34" fill="#fff" stroke="#d9dce4"/><text x="392" y="61" text-anchor="middle">TS4</text>
+      <rect x="435" y="40" width="85" height="34" fill="#fff" stroke="#d9dce4"/><text x="477" y="61" text-anchor="middle">TS5</text>
+      <rect x="520" y="40" width="85" height="34" fill="#fff" stroke="#d9dce4"/><text x="562" y="61" text-anchor="middle">TS6</text>
+      <rect x="605" y="40" width="85" height="34" fill="#fff" stroke="#d9dce4"/><text x="647" y="61" text-anchor="middle">TS7</text>
+    </g>
+    <text x="52" y="90" text-anchor="middle" font-size="7.5" fill="#e4384f">often the control channel (C0, TS0)</text>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 5.1</span> One carrier = 8 timeslots. Timeslot 0 of the first carrier (C0) usually carries the broadcast/control channels cellcap feeds on.</figcaption></figure>
+
+  <h3>Logical channels — the named streams</h3>
+  <p>The bursts carry named channels. These names appear constantly in cellcap and Wireshark, so learn them here and refer back from Chapter 19.</p>
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="9">
+    <defs><marker id="ar2" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L5,3 L0,6 Z" fill="#b6bcc9"/></marker></defs>
+    <rect x="300" y="10" width="120" height="30" rx="5" fill="#15171d"/><text x="360" y="30" text-anchor="middle" fill="#fff" font-weight="700">Logical channels</text>
+    <!-- two branches -->
+    <rect x="120" y="70" width="180" height="28" rx="5" fill="#fdecef" stroke="#e4384f"/><text x="210" y="89" text-anchor="middle" font-weight="700" fill="#b3283b">Common (broadcast / shared)</text>
+    <rect x="430" y="70" width="180" height="28" rx="5" fill="#eef6ff" stroke="#2f6fed"/><text x="520" y="89" text-anchor="middle" font-weight="700" fill="#2f6fed">Dedicated (one phone)</text>
+    <line x1="340" y1="40" x2="210" y2="68" stroke="#b6bcc9" marker-end="url(#ar2)"/>
+    <line x1="380" y1="40" x2="520" y2="68" stroke="#b6bcc9" marker-end="url(#ar2)"/>
+    <!-- common leaves -->
+    <g font-size="8.5">
+      <rect x="20" y="120" width="80" height="26" rx="4" fill="#fff" stroke="#e4384f"/><text x="60" y="137" text-anchor="middle" font-weight="700">BCCH</text>
+      <rect x="110" y="120" width="80" height="26" rx="4" fill="#fff" stroke="#e4384f"/><text x="150" y="137" text-anchor="middle" font-weight="700">CCCH</text>
+      <rect x="200" y="155" width="60" height="24" rx="4" fill="#fff" stroke="#d9dce4"/><text x="230" y="171" text-anchor="middle">PCH</text>
+      <rect x="20" y="155" width="60" height="24" rx="4" fill="#fff" stroke="#d9dce4"/><text x="50" y="171" text-anchor="middle">AGCH</text>
+      <rect x="90" y="155" width="60" height="24" rx="4" fill="#fff" stroke="#d9dce4"/><text x="120" y="171" text-anchor="middle">RACH↑</text>
+      <rect x="160" y="120" width="60" height="26" rx="4" fill="#fff" stroke="#e4384f"/><text x="230" y="137" text-anchor="middle" font-weight="700">FCCH/SCH</text>
+    </g>
+    <!-- dedicated leaves -->
+    <g font-size="8.5">
+      <rect x="420" y="120" width="80" height="26" rx="4" fill="#fff" stroke="#2f6fed"/><text x="460" y="137" text-anchor="middle" font-weight="700">SDCCH</text>
+      <rect x="510" y="120" width="80" height="26" rx="4" fill="#fff" stroke="#2f6fed"/><text x="550" y="137" text-anchor="middle" font-weight="700">TCH</text>
+      <rect x="600" y="120" width="90" height="26" rx="4" fill="#fff" stroke="#2f6fed"/><text x="645" y="137" text-anchor="middle" font-weight="700">SACCH</text>
+      <rect x="510" y="155" width="80" height="24" rx="4" fill="#fff" stroke="#d9dce4"/><text x="550" y="171" text-anchor="middle">FACCH</text>
+      <rect x="600" y="155" width="90" height="24" rx="4" fill="#eef6ff" stroke="#2f6fed"/><text x="645" y="171" text-anchor="middle">PDTCH (GPRS)</text>
+    </g>
+    <g font-size="8" fill="#8a90a0" text-anchor="middle">
+      <text x="210" y="205">↑ = uplink only (cellcap cannot see). Everything else here is downlink-visible.</text>
+      <text x="210" y="225" fill="#e4384f">cellcap feeds mainly on BCCH + CCCH; SDCCH/SACCH too on a combined-C0 cell.</text>
+    </g>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 5.2</span> The GSM logical-channel family. Common channels are broadcast to everyone; dedicated channels belong to one phone during a transaction.</figcaption></figure>
+
+  <table>
+    <thead><tr><th>Channel</th><th>Name</th><th>Carries</th></tr></thead>
+    <tbody>
+      <tr><td><strong>BCCH</strong></td><td>Broadcast Control Channel</td><td>The cell’s identity &amp; config: System Information 1–4, 13.</td></tr>
+      <tr><td><strong>CCCH</strong></td><td>Common Control Channel</td><td>Umbrella for PCH + AGCH + RACH.</td></tr>
+      <tr><td><strong>PCH</strong></td><td>Paging Channel</td><td>“Phone X, I’m looking for you.” (downlink)</td></tr>
+      <tr><td><strong>AGCH</strong></td><td>Access Grant Channel</td><td>Immediate Assignment — “use this dedicated channel.” (downlink)</td></tr>
+      <tr><td><strong>RACH</strong></td><td>Random Access Channel</td><td>The phone asking for a channel. <em>Uplink — invisible to cellcap.</em></td></tr>
+      <tr><td><strong>SDCCH</strong></td><td>Standalone Dedicated Control Channel</td><td>Signalling before/without a call: location update, authentication, SMS.</td></tr>
+      <tr><td><strong>SACCH</strong></td><td>Slow Associated Control Channel</td><td>Housekeeping alongside a dedicated channel (power, measurements, SI5/6).</td></tr>
+      <tr><td><strong>TCH</strong></td><td>Traffic Channel</td><td>The actual voice/data. TCH/F (full-rate), TCH/H (half-rate).</td></tr>
+      <tr><td><strong>FACCH</strong></td><td>Fast Associated Control Channel</td><td>Urgent signalling by “stealing” traffic bursts (e.g. during call setup/handover).</td></tr>
+      <tr><td><strong>PDTCH</strong></td><td>Packet Data Traffic Channel</td><td>GPRS/EDGE data (not decoded by this gr-gsm build).</td></tr>
+    </tbody>
+  </table>
+  <div class="box note"><span class="t">▶ Note — “combined C0”</span> Small cells pack the SDCCH onto the same timeslot 0 as the broadcast/control channels (“combined” configuration, <code>SDCCH/4</code>). On such a cell, an ordinary <code>cellcap run</code> already captures location updates, authentication and SMS-on-signalling — no separate step needed. Larger cells put SDCCH on other timeslots, which is where <code>cellcap decode</code> comes in (Chapter 15).</div>
+</section>
+
+<!-- Ch 6 -->
+<section class="chapter" id="ch-stack">
+  <h2><span class="chno">6</span> · The protocol stack and GSMTAP <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>A decoded message is a stack of layers, each wrapping the next — exactly like TCP/IP, but with cellular names. Wireshark shows you these layers as a tree; cellcap hands Wireshark the bytes via a wrapper called <strong>GSMTAP</strong>.</p>
+
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="9">
+    <!-- left: GSM stack -->
+    <text x="150" y="20" text-anchor="middle" font-weight="700" fill="#5a6072">The GSM radio stack</text>
+    <g text-anchor="middle">
+      <rect x="40" y="35" width="220" height="34" rx="5" fill="#f7f4fd" stroke="#7b4fd0"/><text x="150" y="51" font-weight="700" fill="#7b4fd0">L3 — signalling</text><text x="150" y="63" font-size="8" fill="#5a6072">RR · MM · CC · SMS (TS 24.008 / 44.018)</text>
+      <rect x="40" y="78" width="220" height="34" rx="5" fill="#eef6ff" stroke="#2f6fed"/><text x="150" y="94" font-weight="700" fill="#2f6fed">L2 — LAPDm</text><text x="150" y="106" font-size="8" fill="#5a6072">framing on dedicated channels (TS 44.006)</text>
+      <rect x="40" y="121" width="220" height="34" rx="5" fill="#fdecef" stroke="#e4384f"/><text x="150" y="137" font-weight="700" fill="#b3283b">L1 — physical</text><text x="150" y="149" font-size="8" fill="#5a6072">bursts, GMSK, timeslots (TS 45.00x)</text>
+    </g>
+    <text x="150" y="180" text-anchor="middle" font-size="8" fill="#8a90a0">gr-gsm demodulates L1/L2 and emits each L3 message…</text>
+    <!-- arrow -->
+    <path d="M270 110 L330 110" stroke="#5a6072" stroke-width="2" marker-end="url(#ar)"/>
+    <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5a6072"/></marker></defs>
+    <!-- right: GSMTAP envelope -->
+    <text x="520" y="20" text-anchor="middle" font-weight="700" fill="#5a6072">…wrapped as GSMTAP-over-UDP</text>
+    <g text-anchor="middle">
+      <rect x="360" y="35" width="320" height="26" rx="4" fill="#eceef3" stroke="#b6bcc9"/><text x="520" y="52" font-size="8.5">IP / UDP (to 127.0.0.1:4729, or your Wireshark)</text>
+      <rect x="370" y="66" width="300" height="26" rx="4" fill="#fff3d9" stroke="#d98a00"/><text x="520" y="83" font-size="8.5" font-weight="700" fill="#996300">GSMTAP header (16 bytes: ARFCN, channel, FN, dBm…)</text>
+      <rect x="380" y="97" width="280" height="26" rx="4" fill="#f7f4fd" stroke="#7b4fd0"/><text x="520" y="114" font-size="8.5" fill="#7b4fd0">the L3 message (the payload Wireshark dissects)</text>
+    </g>
+    <text x="520" y="150" text-anchor="middle" font-size="8" fill="#8a90a0">cellcap writes this to pcapng and/or mirrors it over UDP.</text>
+    <!-- bottom note -->
+    <rect x="40" y="205" width="640" height="48" rx="6" fill="#f6f7f9" stroke="#d9dce4"/>
+    <text x="360" y="226" text-anchor="middle" font-size="9" fill="#1a1c23"><tspan font-weight="700">Why GSMTAP?</tspan> It is the universal “tap” envelope for radio layer-3. Because it rides on UDP, a decoded</text>
+    <text x="360" y="242" text-anchor="middle" font-size="9" fill="#1a1c23">frame can be written to a file <tspan font-style="italic">or sent across a network</tspan> to a remote Wireshark — the basis of Chapter 14.</text>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 6.1</span> From radio bursts to a Wireshark-readable packet. gr-gsm handles L1/L2; cellcap wraps each L3 message in GSMTAP and ships it.</figcaption></figure>
+
+  <h3>The layer-3 protocols you will meet</h3>
+  <table>
+    <thead><tr><th>Protocol</th><th>“Protocol discriminator”</th><th>Handles</th></tr></thead>
+    <tbody>
+      <tr><td><strong>RR</strong> — Radio Resource</td><td>0x06</td><td>Channels: System Information, Paging, Immediate Assignment, Ciphering, Channel Release.</td></tr>
+      <tr><td><strong>MM</strong> — Mobility Management</td><td>0x05</td><td>Who &amp; where: Location Updating, Authentication, Identity, TMSI reallocation.</td></tr>
+      <tr><td><strong>CC</strong> — Call Control</td><td>0x03</td><td>Calls: Setup, Alerting, Connect, Disconnect, Release.</td></tr>
+      <tr><td><strong>SMS</strong></td><td>0x09</td><td>Text messages (CP/RP/TP sub-layers).</td></tr>
+      <tr><td><strong>SS</strong> — Supplementary Services</td><td>0x0B</td><td>USSD, call forwarding, etc.</td></tr>
+      <tr><td><strong>GMM/SM</strong></td><td>0x08 / 0x0A</td><td>GPRS mobility &amp; session management.</td></tr>
+    </tbody>
+  </table>
+  <div class="box pro"><span class="t">▲ Pro tip</span> The protocol discriminator is the low nibble of the <em>first</em> L3 byte; the <em>second</em> byte is the message type. That two-byte key — e.g. <code>05 08</code> = MM / Location Updating Request — is exactly what cellcap’s decoder keys on to label events, and what Appendix B tabulates. Learn to spot it in a hex dump and you can read the gist of any frame without a dissector.</div>
+</section>
+<!-- ==================================================================== -->
+<!-- PART II                                                              -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">PART II</div><h1>The toolchain</h1>
+  <p>The radio, the software and the glue. What each piece does, how to choose hardware, and how to confirm it all works before you capture.</p>
+</div></section>
+
+<!-- Ch 7 -->
+<section class="chapter" id="ch-what">
+  <h2><span class="chno">7</span> · What cellcap is (and is not) <span class="track t-b">B</span></h2>
+  <p>cellcap is a small Rust program that <em>orchestrates</em> a chain of other tools and does the housekeeping around them: it finds cells, starts and supervises the demodulator, writes clean capture files, mirrors frames to a remote Wireshark, decodes the SIM, and presents it all in a terminal control panel. It does not itself demodulate radio — that is gr-gsm’s job.</p>
+
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 720 230" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="9">
+    <defs><marker id="arp" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5a6072"/></marker></defs>
+    <!-- antenna -->
+    <text x="55" y="70" text-anchor="middle" font-size="20">📡</text>
+    <text x="55" y="95" text-anchor="middle" font-size="8" fill="#5a6072">the air (Um)</text>
+    <line x1="80" y1="70" x2="120" y2="70" stroke="#5a6072" marker-end="url(#arp)"/>
+    <!-- SDR -->
+    <rect x="122" y="50" width="90" height="42" rx="6" fill="#fdecef" stroke="#e4384f"/><text x="167" y="68" text-anchor="middle" font-weight="700">SDR</text><text x="167" y="82" text-anchor="middle" font-size="7.5" fill="#5a6072">RTL / HackRF / B210</text>
+    <line x1="212" y1="70" x2="252" y2="70" stroke="#5a6072" marker-end="url(#arp)"/>
+    <!-- gr-gsm -->
+    <rect x="254" y="50" width="110" height="42" rx="6" fill="#eef6ff" stroke="#2f6fed"/><text x="309" y="68" text-anchor="middle" font-weight="700" fill="#2f6fed">gr-gsm</text><text x="309" y="82" text-anchor="middle" font-size="7.5" fill="#5a6072">demodulate → GSMTAP</text>
+    <line x1="364" y1="70" x2="404" y2="70" stroke="#5a6072" marker-end="url(#arp)"/>
+    <!-- cellcap -->
+    <rect x="406" y="42" width="130" height="58" rx="8" fill="#15171d"/><text x="471" y="64" text-anchor="middle" font-weight="700" fill="#fff">cellcap</text><text x="471" y="80" text-anchor="middle" font-size="7.5" fill="#c7cad4">supervise · parse · write</text><text x="471" y="92" text-anchor="middle" font-size="7.5" fill="#e4384f">control panel &amp; events</text>
+    <!-- outputs -->
+    <line x1="536" y1="60" x2="585" y2="40" stroke="#1f9d57" marker-end="url(#arp)"/>
+    <line x1="536" y1="82" x2="585" y2="110" stroke="#2f6fed" marker-end="url(#arp)"/>
+    <rect x="587" y="22" width="120" height="34" rx="5" fill="#f1faf4" stroke="#1f9d57"/><text x="647" y="38" text-anchor="middle" font-weight="700" fill="#1f9d57" font-size="8.5">pcapng file</text><text x="647" y="49" text-anchor="middle" font-size="7.5" fill="#5a6072">for later analysis</text>
+    <rect x="587" y="96" width="120" height="34" rx="5" fill="#eef6ff" stroke="#2f6fed"/><text x="647" y="112" text-anchor="middle" font-weight="700" fill="#2f6fed" font-size="8.5">UDP → Wireshark</text><text x="647" y="123" text-anchor="middle" font-size="7.5" fill="#5a6072">live, even remote</text>
+    <!-- wireshark reads both -->
+    <text x="360" y="165" text-anchor="middle" font-size="8.5" fill="#8a90a0">Both outputs are opened in <tspan font-weight="700" fill="#1a1c23">Wireshark</tspan>, which does the authoritative dissection.</text>
+    <text x="360" y="185" text-anchor="middle" font-size="8.5" fill="#8a90a0">cellcap’s own parsing (the live feed) exists to <tspan font-style="italic">confirm the flow</tspan>, not to replace Wireshark.</text>
+    <text x="360" y="212" text-anchor="middle" font-size="8" fill="#e4384f" font-weight="700">cellcap never transmits — every arrow points away from the air, never toward it.</text>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 7.1</span> The capture pipeline. cellcap is the orchestration and presentation layer around gr-gsm.</figcaption></figure>
+
+  <table>
+    <thead><tr><th>cellcap IS</th><th>cellcap is NOT</th></tr></thead>
+    <tbody>
+      <tr><td>A passive, receive-only capture &amp; orchestration tool for GSM (and an LTE launcher).</td><td>A transmitter, jammer, or base station. It cannot call, text, or interfere.</td></tr>
+      <tr><td>A clean way to produce Wireshark-ready pcapng and live UDP streams.</td><td>A replacement for Wireshark’s dissection — it defers to Wireshark.</td></tr>
+      <tr><td>A terminal UI to drive scan / capture / decode / SIM tools.</td><td>A decryptor of other people’s traffic. A5 decrypt needs a key <em>you are entitled to</em>.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Ch 8 -->
+<section class="chapter" id="ch-hw">
+  <h2><span class="chno">8</span> · Hardware: choosing an SDR <span class="track t-b">B</span> <span class="track t-i">I</span></h2>
+  <p>A <strong>software-defined radio</strong> turns radio waves into samples your computer can process. Any SDR that <code>gr-osmosdr</code> supports works; they differ in frequency range, bandwidth and price.</p>
+  <table>
+    <thead><tr><th>SDR</th><th>Range</th><th>Bandwidth</th><th>Good for</th><th>cost</th></tr></thead>
+    <tbody>
+      <tr><td><strong>RTL-SDR</strong> (R820T)</td><td>~24–1766 MHz</td><td>~2.4 MHz</td><td>GSM900/850 2G capture. The cheap entry point (tested here).</td><td>€</td></tr>
+      <tr><td><strong>HackRF One</strong></td><td>1 MHz–6 GHz</td><td>~20 MHz</td><td>Reaches DCS1800/PCS1900; wider surveys. Half-duplex, 8-bit.</td><td>€€</td></tr>
+      <tr><td><strong>USRP B210</strong> (&amp; clones)</td><td>70 MHz–6 GHz</td><td>up to 56 MHz</td><td>2G across all bands, and the base for <strong>LTE</strong> capture. 12-bit, full-duplex, 2×RX.</td><td>€€€</td></tr>
+    </tbody>
+  </table>
+  <div class="box warn"><span class="t">⚠ Caution — RTL &amp; the 1800 band</span> A typical RTL-SDR’s tuner tops out below 1.8 GHz, so it <em>cannot</em> reach the DCS1800 downlink. For 1800/1900 bands or any LTE work you need a HackRF or a B210-class device. Also prefer a <strong>USB 3.0</strong> port for the B210 — on USB 2 you get buffer underruns and no decode.</div>
+  <div class="box pro"><span class="t">▲ Pro tip — B210 clones</span> Clones (e.g. AD9361 + Kintex-7) usually present as a B210 to UHD, but may need the <em>vendor’s</em> <code>usrp_b210_fpga.bin</code> rather than the stock Ettus image. If <code>uhd_usrp_probe</code> fails to load the FPGA, point UHD at the vendor file (<code>--args="fpga=/path/…"</code>).</div>
+  <p><strong>Antennas matter.</strong> Use an antenna cut for the band (a 900 MHz whip for GSM900). Indoors near a window is usually enough to hear the strongest local cell at −25 to −60 dBm.</p>
+</section>
+
+<!-- Ch 9 -->
+<section class="chapter" id="ch-sw">
+  <h2><span class="chno">9</span> · Software and installation <span class="track t-i">I</span></h2>
+  <p>On Debian/Ubuntu the core stack is a few packages; cellcap builds with Rust.</p>
+  <pre><span class="c"># core: demodulator, scan tools, SDR drivers, Wireshark</span>
+sudo apt install gr-gsm rtl-sdr hackrf uhd-host wireshark
+
+<span class="c"># build and install cellcap</span>
+make release &amp;&amp; sudo make install
+sudo systemctl enable --now cellcap   <span class="c"># optional: run as a service</span></pre>
+  <table>
+    <thead><tr><th>Component</th><th>Package / source</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td>gr-gsm</td><td><code>apt install gr-gsm</code></td><td>Demodulates GSM; provides <code>grgsm_livemon_headless</code>, <code>grgsm_scanner</code>.</td></tr>
+      <tr><td>cellcap-decode</td><td>generated by <code>make install</code></td><td>A patched <code>grgsm_decode</code> (the packaged one is broken on current GNU Radio).</td></tr>
+      <tr><td>UHD</td><td><code>apt install uhd-host libuhd-dev</code></td><td>USRP/B210 driver; <code>uhd_images_downloader</code> fetches the FPGA image.</td></tr>
+      <tr><td>LTESniffer</td><td>build out-of-tree (<code>tools/build-ltesniffer.sh</code>)</td><td>LTE downlink → MAC-LTE pcap. Needs a B210-class SDR.</td></tr>
+      <tr><td>5GSniffer</td><td>build out-of-tree (<code>tools/build-5gsniffer.sh</code>)</td><td>5G NR PDCCH decoder (research, file-first).</td></tr>
+      <tr><td>Wireshark</td><td><code>apt install wireshark</code></td><td>The dissector &amp; analysis GUI. Has built-in GSM/LTE/GSMTAP support.</td></tr>
+    </tbody>
+  </table>
+  <div class="box note"><span class="t">▶ Note — the <code>grgsm_decode</code> fix</span> The <code>grgsm_decode</code> shipped with gr-gsm calls a GNU Radio block that moved namespaces, so it crashes. <code>make install</code> generates a fixed copy, <code>cellcap-decode</code>. This matters only for the <code>decode</code> command (Chapter 15).</div>
+</section>
+
+<!-- Ch 10 -->
+<section class="chapter" id="ch-check">
+  <h2><span class="chno">10</span> · Preflight: <code>cellcap check</code> <span class="track t-b">B</span></h2>
+  <p>Before anything else, run the preflight. It is a ticked checklist of every tool and SDR cellcap can use — green means ready, yellow means optional-and-absent, red means a required piece is missing.</p>
+  <pre>cellcap check</pre>
+  <figure><img src="../img/check.png" alt="cellcap check output"><figcaption><span class="fignum">Figure 10.1</span> <code>cellcap check</code> — required tools, the SDR device, and optional LTE readiness, each with a status glyph.</figcaption></figure>
+  <p>Read it top to bottom: the live-capture tools (gr-gsm, a scan tool), the decode tools, the GNU Radio runtime, which SDR is attached, and whether the optional LTE pieces (LTESniffer, the B210 FPGA image) are present. If a required row is red, install that package and run it again.</p>
+</section>
+
+<!-- ==================================================================== -->
+<!-- PART III                                                             -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">PART III</div><h1>Using cellcap</h1>
+  <p>Driving the tool: the control panel, finding cells, capturing, mirroring live to Wireshark, decoding dedicated channels, and reading the SIM.</p>
+</div></section>
+
+<!-- Ch 11 -->
+<section class="chapter" id="ch-panel">
+  <h2><span class="chno">11</span> · The interactive control panel <span class="track t-b">B</span></h2>
+  <p>Run <code>cellcap</code> with no arguments (or <code>cellcap ui</code>) to open the control panel: a home menu of every mode, a form to set its options, and a live output pane — all without leaving the terminal. Everything here maps to a command-line subcommand, so anything you learn in the UI works in scripts too.</p>
+  <figure><img src="../img/ui-home.png" alt="control panel home"><figcaption><span class="fignum">Figure 11.1</span> The home menu. <span class="kbd">↑</span><span class="kbd">↓</span> move · <span class="kbd">Enter</span> configure · <span class="kbd">q</span> quit.</figcaption></figure>
+  <figure><img src="../img/ui-form.png" alt="options form"><figcaption><span class="fignum">Figure 11.2</span> A mode’s options form (here, LTE capture). Type to edit a field, <span class="kbd">Space</span>/<span class="kbd">←→</span> toggle or cycle, <span class="kbd">Enter</span> runs, <span class="kbd">Esc</span> goes back.</figcaption></figure>
+  <figure><img src="../img/ui-run.png" alt="in-UI output"><figcaption><span class="fignum">Figure 11.3</span> The output pane — here running <code>check</code> inside the panel. Scroll with <span class="kbd">↑</span><span class="kbd">↓</span>, <span class="kbd">s</span> stops a running capture, <span class="kbd">Esc</span> returns.</figcaption></figure>
+</section>
+
+<!-- Ch 12 -->
+<section class="chapter" id="ch-scan">
+  <h2><span class="chno">12</span> · Scanning for cells <span class="track t-b">B</span> <span class="track t-i">I</span></h2>
+  <p>A scan finds which channels carry a real cell. On RTL/HackRF, cellcap sweeps the band for power then briefly decodes each strong channel; on UHD it uses <code>grgsm_scanner</code>.</p>
+  <pre>cellcap scan                                 <span class="c"># GSM900 on the default SDR</span>
+cellcap scan --band GSM900 --band DCS1800    <span class="c"># several bands</span>
+cellcap scan --device uhd                     <span class="c"># USRP/B210</span></pre>
+  <pre>ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    NETWORK
+11     937.2 MHz      3.2   238  01   431    1660   TDC A/S
+94     953.8 MHz    -10.1   -    -    -      -      (not GSM)</pre>
+  <p>The <strong>NETWORK</strong> column is resolved from the broadcast MCC/MNC via cellcap’s E.212 table (operator, else country). <code>(not GSM)</code> means the channel has power but no decodable broadcast — a traffic carrier or non-GSM signal. The raw codes are always shown too, so a name change is only ever a one-line edit to the table.</p>
+</section>
+
+<!-- Ch 13 -->
+<section class="chapter" id="ch-run">
+  <h2><span class="chno">13</span> · Capturing and the live dashboard <span class="track t-i">I</span></h2>
+  <p><code>cellcap run</code> captures the broadcast and control channels to pcapng. Give it a channel, or let it scan and pick.</p>
+  <pre>cellcap run --arfcn 11 --output-dir .        <span class="c"># one channel, save here, until Ctrl-C</span>
+cellcap run --plmn 23801 --output-dir .      <span class="c"># scan, capture the strongest TDC cell</span>
+cellcap run --arfcn 11 -i                     <span class="c"># live dashboard</span>
+cellcap run --arfcn 11 -i --no-write          <span class="c"># watch only, save nothing</span></pre>
+  <p>The <strong>dashboard</strong> (<code>-i</code>) has tabs: <em>Overview</em>, <em>Live</em> (the rolling decoded feed), <em>Cells</em>, <em>Captures</em>, <em>Log</em>. The Live feed shows, per message: the time, the <strong>channel</strong> (BCCH/CCCH/SDCCH/SACCH…), the signal, the <strong>decoded event</strong> (colour-coded), and its detail — exactly the information you can cross-check against Wireshark.</p>
+  <figure><img src="../img/ui-live.png" alt="live dashboard feed"><figcaption><span class="fignum">Figure 13.1</span> The Live tab mid-capture on a TDC cell. Note the channel column, colour-coded events (Paging, Immediate Assignment, a decoded GPRS Mobility Management message on SACCH/SDCCH/4), and the status bar.</figcaption></figure>
+  <figure><img src="../img/ui-cells.png" alt="cells tab"><figcaption><span class="fignum">Figure 13.2</span> The Cells tab — each identified cell with its resolved operator (NETWORK), codes, signal and frame count.</figcaption></figure>
+  <p>Prefer a log-friendly view? <code>--stream</code> prints one readable line per message to stdout instead of the dashboard. Both respect <code>--drop-paging</code> (leave others’ paging identities out) and the rotation/size limits.</p>
+</section>
+
+<!-- Ch 14 -->
+<section class="chapter" id="ch-udp">
+  <h2><span class="chno">14</span> · Live remote Wireshark over UDP <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>Because GSMTAP rides on UDP, cellcap can <strong>mirror every frame to a Wireshark on another machine</strong> — ideal when the SDR host (e.g. a headless DMZ box) has no GUI. Watch it live, with or without saving locally.</p>
+  <pre>cellcap run --arfcn 11 --no-write --gsmtap-udp 172.22.22.20:5555
+cellcap run --arfcn 11 -i --gsmtap-udp 172.22.22.20:4729  <span class="c"># dashboard + mirror</span></pre>
+
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 720 170" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="9">
+    <defs><marker id="aru" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#2f6fed"/></marker></defs>
+    <rect x="20" y="55" width="150" height="60" rx="8" fill="#15171d"/><text x="95" y="80" text-anchor="middle" fill="#fff" font-weight="700">DMZ host</text><text x="95" y="96" text-anchor="middle" fill="#c7cad4" font-size="8">SDR + cellcap</text><text x="95" y="108" text-anchor="middle" fill="#e4384f" font-size="7.5">no GUI</text>
+    <line x1="170" y1="85" x2="320" y2="85" stroke="#2f6fed" stroke-width="2" marker-end="url(#aru)"/>
+    <text x="245" y="76" text-anchor="middle" fill="#2f6fed" font-size="8" font-weight="700">GSMTAP / UDP 5555</text>
+    <text x="245" y="104" text-anchor="middle" fill="#8a90a0" font-size="7.5">firewall: DMZ → LAN allowed</text>
+    <rect x="322" y="45" width="160" height="80" rx="8" fill="#eef6ff" stroke="#2f6fed"/><text x="402" y="70" text-anchor="middle" font-weight="700" fill="#2f6fed">LAN workstation</text><text x="402" y="86" text-anchor="middle" font-size="8" fill="#5a6072">Wireshark · udpdump</text><text x="402" y="100" text-anchor="middle" font-size="8" fill="#5a6072">172.22.22.20</text><text x="402" y="114" text-anchor="middle" font-size="7.5" fill="#e4384f">Payload type = gsmtap</text>
+    <text x="600" y="75" text-anchor="middle" font-size="18">🦈</text><text x="600" y="98" text-anchor="middle" font-size="8" fill="#5a6072">live dissection</text>
+    <line x1="484" y1="85" x2="560" y2="85" stroke="#2f6fed" marker-end="url(#aru)"/>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 14.1</span> Mirroring from a headless capture host to a remote Wireshark.</figcaption></figure>
+
+  <p>On the receiving side there are two ways to catch it:</p>
+  <ul>
+    <li><strong>Direct, port 4729.</strong> Capture on the normal interface, filter <code>udp.port == 4729</code>; Wireshark auto-dissects GSMTAP on its registered port.</li>
+    <li><strong>udpdump listener, port 5555.</strong> Start Wireshark’s <em>udpdump</em> interface. It wraps each datagram in an Exported PDU tagged with a dissector name.</li>
+  </ul>
+  <div class="box warn"><span class="t">⚠ The one thing everyone trips on</span> udpdump defaults its <strong>Payload type</strong> to <code>data</code>, so your frames arrive <em>undissected</em>. Set it to <code>gsmtap</code> (Capture → Options → udpdump → gear), or <code>tshark -i udpdump -o extcap.udpdump.payload:gsmtap</code>. There is no pass-through mode — the payload type is the only lever.</div>
+  <div class="box danger"><span class="t">■ Law &amp; ethics</span> The mirrored frames cross your network in the clear and can contain others’ paging identities. Only mirror to a host and network you control.</div>
+</section>
+
+<!-- Ch 15 -->
+<section class="chapter" id="ch-decode">
+  <h2><span class="chno">15</span> · Decoding dedicated &amp; ciphered channels <span class="track t-p">P</span></h2>
+  <p>A plain <code>run</code> captures broadcast/common channels (and, on a combined-C0 cell, the SDCCH/4). To decode a <strong>dedicated</strong> channel elsewhere — a standalone SDCCH/8 on another timeslot, or a traffic channel — use <code>decode</code>. It records a short IQ file (or takes one you give) and runs the decoder into a pcapng.</p>
+  <pre>cellcap decode --arfcn 11 --mode sdcch8 --timeslot 1
+cellcap decode --arfcn 11 --mode bcch-sdcch4 --timeslot 0 --cfile grab.cfile
+cellcap decode --arfcn 11 --mode sdcch8 --timeslot 1 \
+               --cipher-a5 1 --cipher-kc 1234567890ABCDEF   <span class="c"># A5 decrypt</span></pre>
+  <p>Modes: <code>bcch</code>, <code>bcch-sdcch4</code>, <code>sdcch8</code>, <code>tchf</code>, <code>tchh</code>. Decryption happens <em>inside</em> the decoder — Wireshark cannot do A5 itself. Supply the <strong>session key Kc</strong> with <code>--cipher-kc</code>; the master key <strong>Ki cannot be used directly</strong> (Chapter 25).</p>
+  <div class="box warn"><span class="t">⚠ Caution</span> This gr-gsm build has <strong>no GPRS/PDTCH decoder</strong>, and none of these tools dehop a <strong>frequency-hopping</strong> traffic channel; <code>decode</code> works on one fixed channel at a time.</div>
+</section>
+
+<!-- Ch 16 -->
+<section class="chapter" id="ch-sim">
+  <h2><span class="chno">16</span> · SIM tools: keys, identities, audit <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>With a test SIM in a serial GSM modem, cellcap can read the files you need to decrypt and to filter a capture to your own device — and audit the SIM’s attack surface.</p>
+  <pre>cellcap extract-kc /dev/ttyUSB0    <span class="c"># the A5 session key Kc (+ CKSN)</span>
+cellcap sim-info   /dev/ttyUSB0    <span class="c"># IMSI, Kc, GPRS Kc, TMSI + LAI</span>
+cellcap audit-sim  /dev/ttyUSB0    <span class="c"># toolkit / OTA attack surface</span></pre>
+  <p>Use the <strong>IMSI</strong> (or TMSI) to filter a capture to your own phone in Wireshark; pass the <strong>Kc</strong> to <code>decode --cipher-kc</code>. <code>audit-sim</code> reads the SIM Service Table and flags toolkit/OTA features behind known attacks — above all <strong>Data download via SMS-PP</strong>, the precondition for Simjacker and WIBattack (Chapter 27).</p>
+  <div class="box danger"><span class="t">■ Law &amp; ethics</span> Only read SIMs you own or are explicitly authorised to test. IMSI, TMSI and Kc are secrets — keep them off shared machines and out of files you circulate.</div>
+  <div class="box note"><span class="t">▶ Note</span> The modem may be held by another program (an SMS gateway, <code>ModemManager</code>); stop it first so the port is free.</div>
+</section>
+
+<!-- Ch 17 -->
+<section class="chapter" id="ch-inspect">
+  <h2><span class="chno">17</span> · Inspecting captures &amp; the service <span class="track t-b">B</span></h2>
+  <p><code>cellcap inspect FILE…</code> summarises a capture without an SDR — frame counts by message type and channel, the cells seen, the time span. A quick way to confirm a file holds what you want before opening Wireshark.</p>
+  <pre>cellcap inspect cellcap-gsm-20261127T085130Z.pcapng</pre>
+  <p>Run continuously as a <strong>service</strong>: settings live in <code>/etc/default/cellcap</code> as the arguments to <code>cellcap run</code>; after a change, <code>systemctl restart cellcap</code> and watch <code>journalctl -u cellcap -f</code>. The service runs as the unprivileged <code>cellcap</code> user (in group <code>plugdev</code> for the SDR). Files land in <code>/var/lib/cellcap/captures</code>, rotated by time and size, with a cap on the directory.</p>
+</section>
+<!-- ==================================================================== -->
+<!-- PART IV                                                              -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">PART IV</div><h1>Reading the air</h1>
+  <p>The heart of the book. Byte by byte: the GSMTAP envelope, the channels, a dictionary of every message you’ll meet, a full worked example, and the flow chains that tie them together.</p>
+</div></section>
+
+<!-- Ch 18 -->
+<section class="chapter" id="ch-gsmtap">
+  <h2><span class="chno">18</span> · GSMTAP dissected <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>Every frame cellcap emits begins with a fixed 16-byte GSMTAP header, then the layer-3 message. Learn to read the header by eye and you always know <em>which channel, which cell, how strong</em> before Wireshark even opens.</p>
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 720 210" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans Mono, monospace" font-size="10">
+    <!-- 16 byte grid -->
+    <g>
+      <!-- row headings -->
+      <g font-family="DejaVu Sans, sans-serif" font-size="8" fill="#8a90a0" text-anchor="end">
+        <text x="48" y="48">+0</text><text x="48" y="92">+8</text>
+      </g>
+    </g>
+    <g text-anchor="middle">
+      <!-- first 8 bytes -->
+      <g>
+        <rect x="55"  y="30" width="78" height="26" fill="#fdecef" stroke="#e4384f"/><text x="94"  y="48">02</text>
+        <rect x="133" y="30" width="78" height="26" fill="#fdecef" stroke="#e4384f"/><text x="172" y="48">04</text>
+        <rect x="211" y="30" width="78" height="26" fill="#fff3d9" stroke="#d98a00"/><text x="250" y="48">01</text>
+        <rect x="289" y="30" width="78" height="26" fill="#f6f7f9" stroke="#b6bcc9"/><text x="328" y="48">00</text>
+        <rect x="367" y="30" width="156" height="26" fill="#eef6ff" stroke="#2f6fed"/><text x="445" y="48">00 0b</text>
+        <rect x="523" y="30" width="78" height="26" fill="#f1faf4" stroke="#1f9d57"/><text x="562" y="48">e5</text>
+        <rect x="601" y="30" width="78" height="26" fill="#f6f7f9" stroke="#b6bcc9"/><text x="640" y="48">00</text>
+      </g>
+      <!-- next 8 bytes -->
+      <g>
+        <rect x="55"  y="74" width="312" height="26" fill="#f7f4fd" stroke="#7b4fd0"/><text x="211" y="92">00 00 21 72  (frame number)</text>
+        <rect x="367" y="74" width="78" height="26" fill="#fde9ef" stroke="#e4384f"/><text x="406" y="92">02</text>
+        <rect x="445" y="74" width="234" height="26" fill="#f6f7f9" stroke="#b6bcc9"/><text x="562" y="92">1a 02 … (ant/subslot/res)</text>
+      </g>
+    </g>
+    <!-- annotations -->
+    <g font-family="DejaVu Sans, sans-serif" font-size="8">
+      <text x="94"  y="120" text-anchor="middle" fill="#b3283b" font-weight="700">version 2</text>
+      <text x="172" y="120" text-anchor="middle" fill="#b3283b" font-weight="700">hdr len ×4=16</text>
+      <text x="250" y="120" text-anchor="middle" fill="#996300" font-weight="700">type 01 = Um</text>
+      <text x="328" y="120" text-anchor="middle" fill="#5a6072">timeslot 0</text>
+      <text x="445" y="120" text-anchor="middle" fill="#2f6fed" font-weight="700">ARFCN 11</text>
+      <text x="562" y="120" text-anchor="middle" fill="#1f9d57" font-weight="700">signal −27 dBm</text>
+      <text x="640" y="120" text-anchor="middle" fill="#5a6072">SNR</text>
+      <text x="406" y="150" text-anchor="middle" fill="#b3283b" font-weight="700">channel 02 = CCCH</text>
+    </g>
+    <text x="360" y="180" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="8.5" fill="#8a90a0">After byte 16 comes the layer-3 message — here, as we’ll see, a Paging Request.</text>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 18.1</span> The 16-byte GSMTAP header annotated, from a real frame on ARFCN 11.</figcaption></figure>
+  <table>
+    <thead><tr><th>Offset</th><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>version</td><td>Always <code>02</code>.</td></tr>
+      <tr><td>1</td><td>header length</td><td>In 32-bit words; <code>04</code> → 16 bytes.</td></tr>
+      <tr><td>2</td><td>payload type</td><td><code>01</code> = GSM Um (the air interface).</td></tr>
+      <tr><td>3</td><td>timeslot</td><td>0–7.</td></tr>
+      <tr><td>4–5</td><td>ARFCN</td><td>Channel number (top bits flag uplink/band).</td></tr>
+      <tr><td>6</td><td>signal</td><td>dBm, signed.</td></tr>
+      <tr><td>7</td><td>SNR</td><td>Signal-to-noise.</td></tr>
+      <tr><td>8–11</td><td>frame number</td><td>The TDMA frame counter.</td></tr>
+      <tr><td>12</td><td><strong>sub-type / channel</strong></td><td>The logical channel (0x01 BCCH, 0x02 CCCH, 0x08 SDCCH/8…; +0x80 = SACCH). cellcap’s channel column reads this byte.</td></tr>
+      <tr><td>13–15</td><td>antenna / subslot / reserved</td><td>Minor fields.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Ch 19 -->
+<section class="chapter" id="ch-channels">
+  <h2><span class="chno">19</span> · The logical channels explained <span class="track t-i">I</span></h2>
+  <p>Chapter 5 introduced the channel family; here is what you actually <em>see</em> on each, and the GSMTAP channel byte that identifies it.</p>
+  <table>
+    <thead><tr><th>Channel</th><th>GSMTAP byte</th><th>What appears there</th><th>cellcap column</th></tr></thead>
+    <tbody>
+      <tr><td>BCCH</td><td>0x01</td><td>System Information 1–4, 13 — the cell’s identity &amp; config.</td><td><code>BCCH</code></td></tr>
+      <tr><td>CCCH</td><td>0x02</td><td>Paging, Immediate Assignment, some SI (2quater, 13).</td><td><code>CCCH</code></td></tr>
+      <tr><td>SDCCH/4</td><td>0x07</td><td>Dedicated signalling on a combined-C0 cell: LU, auth, SMS.</td><td><code>SDCCH/4</code></td></tr>
+      <tr><td>SDCCH/8</td><td>0x08</td><td>The same, on larger cells (other timeslots).</td><td><code>SDCCH/8</code></td></tr>
+      <tr><td>SACCH</td><td>+0x80</td><td>Alongside a dedicated channel: SI5/6, measurements, power control.</td><td><code>SACCH/…</code></td></tr>
+      <tr><td>TCH/F, TCH/H</td><td>0x09, 0x0A</td><td>Voice/data (ciphered on a real network).</td><td><code>TCH/F</code></td></tr>
+      <tr><td>PDTCH</td><td>0x0D</td><td>GPRS packet data (not decoded by this build).</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <div class="box exec"><span class="t">◆ In human terms</span> BCCH is the <em>billboard</em> every phone reads on arrival. CCCH is the <em>public address system</em> (paging) and the <em>ticket window</em> (channel grants). SDCCH is a <em>private booth</em> for a quick conversation (registering, authenticating, a text). TCH is the <em>phone line</em> itself once a call is up. SACCH is the <em>intercom</em> that runs quietly alongside the booth or the line.</div>
+</section>
+
+<!-- Ch 20 -->
+<section class="chapter" id="ch-dict">
+  <h2><span class="chno">20</span> · Message dictionary <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>The messages you will see most, grouped by protocol. The two-byte key (protocol discriminator + message type) is what cellcap labels and Wireshark dissects. A fuller hex table is in Appendix B.</p>
+
+  <h3>System Information (RR, on BCCH/CCCH)</h3>
+  <table>
+    <thead><tr><th>Type</th><th>Message</th><th>Carries</th></tr></thead>
+    <tbody>
+      <tr><td>SI 1</td><td>System Information 1</td><td>Cell channel description, RACH control.</td></tr>
+      <tr><td>SI 2 / 2bis / 2ter / 2quater</td><td>System Information 2…</td><td>Neighbour-cell lists to measure (incl. 3G/4G neighbours).</td></tr>
+      <tr><td>SI 3</td><td>System Information 3</td><td><strong>Cell identity</strong> (MCC/MNC/LAC/CID), control-channel layout. The headline frame.</td></tr>
+      <tr><td>SI 4</td><td>System Information 4</td><td>Location area, cell-selection parameters.</td></tr>
+      <tr><td>SI 13</td><td>System Information 13</td><td>GPRS / packet-data parameters.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Radio Resource (RR, PD 0x06)</h3>
+  <table>
+    <thead><tr><th>Type</th><th>Message</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>0x21/0x22/0x24</td><td>Paging Request Type 1 / 2 / 3</td><td>The network reaching 1–4 phones by TMSI/IMSI.</td></tr>
+      <tr><td>0x3F</td><td>Immediate Assignment</td><td>“Use this dedicated channel” (grant on AGCH).</td></tr>
+      <tr><td>0x35 / 0x32</td><td>Ciphering Mode Command / Complete</td><td>Start A5 encryption (cellcap shows the algorithm).</td></tr>
+      <tr><td>0x2E / 0x29</td><td>Assignment Command / Complete</td><td>Move to a traffic channel.</td></tr>
+      <tr><td>0x0D</td><td>Channel Release</td><td>Done — free the channel (cellcap shows the cause).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Mobility Management (MM, PD 0x05) &amp; Call Control (CC, PD 0x03)</h3>
+  <table>
+    <thead><tr><th>Key</th><th>Message</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>05 08</td><td>Location Updating Request</td><td>Phone registering in an area. <em>(uplink)</em></td></tr>
+      <tr><td>05 02 / 05 04</td><td>LU Accept / Reject</td><td>Network’s answer (cellcap shows LAI / cause).</td></tr>
+      <tr><td>05 12 / 05 14</td><td>Authentication Request / Response</td><td>Challenge (RAND) / answer (SRES).</td></tr>
+      <tr><td>05 18 / 05 19</td><td>Identity Request / Response</td><td>“Tell me your IMSI/IMEI.” (cellcap shows which).</td></tr>
+      <tr><td>05 1A</td><td>TMSI Reallocation Command</td><td>Hand out a fresh TMSI.</td></tr>
+      <tr><td>05 24</td><td>CM Service Request</td><td>“I want to make a call / send an SMS.” <em>(uplink)</em></td></tr>
+      <tr><td>03 05 / 03 01 / 03 07</td><td>Setup / Alerting / Connect</td><td>Call setup → ringing → answered.</td></tr>
+      <tr><td>03 25 / 03 2D</td><td>Disconnect / Release</td><td>Call teardown.</td></tr>
+      <tr><td>09 01</td><td>SMS CP-DATA</td><td>A text message segment.</td></tr>
+    </tbody>
+  </table>
+  <div class="box note"><span class="t">▶ Note — direction</span> Messages marked <em>(uplink)</em> are sent <strong>by the phone</strong> and cellcap cannot receive them. You infer them from the downlink side: you won’t see the LU Request, but you’ll see the LU Accept that answers it.</div>
+</section>
+
+<!-- Ch 21 -->
+<section class="chapter" id="ch-worked">
+  <h2><span class="chno">21</span> · Worked example: the roaming paging <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>Here is a real frame captured on a Danish TDC cell and mirrored to Wireshark’s udpdump listener — decoded layer by layer, exactly as you would in the field. (The subscriber’s full IMSI is redacted; only the home-network part, which is not personal, is shown.)</p>
+  <pre>0000  00 0c 00 08 67 73 6d 74 61 70 00 00 00 14 00 04   <span class="c">← udpdump wrapper</span>
+0010  0a 0a 0a 23 00 15 00 04 7f 00 00 01 00 19 00 04
+0020  00 00 49 93 00 1a 00 04 00 00 15 b3 00 00 00 00
+0030  02 04 01 00 00 0b e5 00 00 21 72 e2 02 1a 02 3f   <span class="c">← GSMTAP header</span>
+0040  4d 06 21 20 08 29 23 10 96 90 85 18 69 17 05 f4   <span class="c">← RR Paging Request Type 1</span>
+0050  c1 38 6e 77 2f 30 2b</pre>
+
+  <h3>Layer 1 — the udpdump wrapper</h3>
+  <p>The Exported-PDU tags tell the story of the transport: dissector name <code>67 73 6d 74 61 70</code> = “gsmtap” (so the Payload type <em>was</em> set correctly), source <code>10.10.10.35</code>, destination <code>127.0.0.1</code>, UDP <code>18835 → 5555</code>, then an end-of-options marker <code>00 00 00 00</code>.</p>
+
+  <h3>Layer 2 — the GSMTAP header</h3>
+  <p><code>02 04 01 00 | 00 0b | e5 | 00 | 00 21 72 e2 | 02 …</code> → version 2, Um, <strong>ARFCN 11</strong>, <strong>−27 dBm</strong>, frame number, channel <code>02</code> = <strong>CCCH</strong>. The serving cell is the one you already know from its SI3: <strong>TDC A/S · Denmark (238/01)</strong>.</p>
+
+  <h3>Layer 3 — RR Paging Request Type 1</h3>
+  <p><code>4d</code> is the L2 pseudo-length; <code>06</code> = RR; <code>21</code> = <strong>Paging Request Type 1</strong>. Then <strong>two</strong> mobile identities are paged:</p>
+  <table>
+    <thead><tr><th>#</th><th>Bytes</th><th>Decode</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>08 29 23 10 96 90 85 18 69</code></td><td>len 8; first octet <code>29</code> → type <code>001</code> = <strong>IMSI</strong>, odd length. BCD digits = <code>232 01 …</code> → <strong>MCC 232 = Austria, MNC 01 = A1 Telekom Austria</strong>.</td></tr>
+      <tr><td>2</td><td><code>17 05 f4 c1 38 6e 77</code></td><td>IEI <code>17</code> (second identity), <code>f4</code> → type <code>100</code> = <strong>TMSI</strong>, value <code>c1 38 6e 77</code>.</td></tr>
+    </tbody>
+  </table>
+  <div class="box pro"><span class="t">▲ Conclusion</span> A Paging Request on TDC’s GSM900 cell in Denmark, reaching two phones: an <strong>A1 Telekom Austria subscriber roaming on TDC</strong>, addressed <strong>by IMSI</strong>, plus a local one by TMSI. In cellcap’s live feed this exact frame reads: <code>CCCH&nbsp;&nbsp;Paging&nbsp;&nbsp;2 phone(s) called, by IMSI + TMSI&nbsp;&nbsp;(permanent identity in the clear)</code> — and in Wireshark it is <code>GSMTAP → RR → Paging Request Type 1 → Mobile Identity (IMSI 23201…) + Mobile Identity (TMSI)</code>. The two views line up: that is your validation.</div>
+  <div class="box note"><span class="t">▶ Why paged by IMSI?</span> The network pages by IMSI when it has no valid TMSI for a subscriber — classic for a <strong>fresh roamer</strong> that just attached. Which fits: an Austrian phone newly arrived on a Danish network.</div>
+</section>
+
+<!-- Ch 22 -->
+<section class="chapter" id="ch-flows">
+  <h2><span class="chno">22</span> · Flow chains: call, SMS, location update <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>Individual messages are notes; the music is the <em>sequence</em>. These are the exchanges you will watch unfold in the live feed and in Wireshark. In each diagram, <span style="color:#1f9d57;font-weight:700">green ↓</span> is downlink (cellcap can see it) and <span style="color:#8a90a0;font-weight:700">grey ↑</span> is uplink (invisible — inferred).</p>
+
+  <h3>Mobile-terminated call (someone calls the phone)</h3>
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="8.5">
+    <defs>
+      <marker id="dn" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1f9d57"/></marker>
+      <marker id="up" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8a90a0"/></marker>
+    </defs>
+    <!-- lifelines -->
+    <text x="140" y="20" text-anchor="middle" font-weight="700">MS (phone)</text>
+    <text x="580" y="20" text-anchor="middle" font-weight="700">Network (BTS/BSC/MSC)</text>
+    <line x1="140" y1="28" x2="140" y2="285" stroke="#d9dce4" stroke-width="2"/>
+    <line x1="580" y1="28" x2="580" y2="285" stroke="#d9dce4" stroke-width="2"/>
+    <!-- steps -->
+    <g>
+      <line x1="580" y1="48" x2="140" y2="48" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="43" text-anchor="middle" fill="#1f9d57">① Paging Request (PCH) — “phone X, call for you”</text>
+      <line x1="140" y1="78" x2="580" y2="78" stroke="#8a90a0" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#up)"/><text x="360" y="73" text-anchor="middle" fill="#8a90a0">② Channel Request (RACH) ↑ invisible</text>
+      <line x1="580" y1="108" x2="140" y2="108" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="103" text-anchor="middle" fill="#1f9d57">③ Immediate Assignment (AGCH) — “use SDCCH/8 TS3”</text>
+      <line x1="140" y1="138" x2="580" y2="138" stroke="#8a90a0" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#up)"/><text x="360" y="133" text-anchor="middle" fill="#8a90a0">④ Paging Response (SDCCH) ↑ invisible</text>
+      <line x1="580" y1="168" x2="140" y2="168" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="163" text-anchor="middle" fill="#1f9d57">⑤ Authentication Request (RAND)</text>
+      <line x1="580" y1="198" x2="140" y2="198" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="193" text-anchor="middle" fill="#1f9d57">⑥ Ciphering Mode Command (start A5/1) 🔒</text>
+      <line x1="580" y1="228" x2="140" y2="228" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="223" text-anchor="middle" fill="#1f9d57">⑦ CC Setup → Assignment to TCH</text>
+      <line x1="580" y1="258" x2="140" y2="258" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="253" text-anchor="middle" fill="#1f9d57">⑧ Alerting / Connect — call is up (on TCH)</text>
+    </g>
+    <rect x="120" y="272" width="480" height="20" rx="4" fill="#fdf1f3"/><text x="360" y="286" text-anchor="middle" fill="#b3283b" font-size="7.8">From step ⑥ the content is encrypted; without the key you see the events, not the words.</text>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 22.1</span> Mobile-terminated call. The <em>Paging → (Channel Request) → Immediate Assignment</em> trio at the top is the chain discussed in the field: paging is “you’re wanted”; the phone asks for a channel (uplink, unseen); the network grants it (downlink, seen).</figcaption></figure>
+
+  <h3>Location Update (phone registers in a new area)</h3>
+  <figure><div class="svg-wrap">
+  <svg viewBox="0 0 720 210" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, sans-serif" font-size="8.5">
+    <defs>
+      <marker id="dn" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1f9d57"/></marker>
+      <marker id="up" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8a90a0"/></marker>
+    </defs>
+    <text x="140" y="20" text-anchor="middle" font-weight="700">MS</text><text x="580" y="20" text-anchor="middle" font-weight="700">Network</text>
+    <line x1="140" y1="28" x2="140" y2="195" stroke="#d9dce4" stroke-width="2"/><line x1="580" y1="28" x2="580" y2="195" stroke="#d9dce4" stroke-width="2"/>
+    <line x1="140" y1="52" x2="580" y2="52" stroke="#8a90a0" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#up)"/><text x="360" y="47" text-anchor="middle" fill="#8a90a0">① (Channel Request + ) Location Updating Request ↑</text>
+    <line x1="580" y1="82" x2="140" y2="82" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="77" text-anchor="middle" fill="#1f9d57">② Authentication Request (RAND)</text>
+    <line x1="580" y1="112" x2="140" y2="112" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="107" text-anchor="middle" fill="#1f9d57">③ Ciphering Mode Command 🔒</text>
+    <line x1="580" y1="142" x2="140" y2="142" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="137" text-anchor="middle" fill="#1f9d57">④ TMSI Reallocation (new TMSI)</text>
+    <line x1="580" y1="172" x2="140" y2="172" stroke="#1f9d57" stroke-width="1.6" marker-end="url(#dn)"/><text x="360" y="167" text-anchor="middle" fill="#1f9d57">⑤ Location Updating Accept (LAI)  — or Reject (cause)</text>
+  </svg></div>
+  <figcaption><span class="fignum">Figure 22.2</span> Location update. cellcap labels ②–⑤ with their contents (RAND, A5 algorithm, new TMSI, LAI or reject cause).</figcaption></figure>
+
+  <h3>Mobile-originated flows (calls &amp; SMS the phone sends)</h3>
+  <p>A mobile-<em>originated</em> call or SMS has <strong>no paging</strong> — the phone itself initiates: it does a Channel Request (uplink), gets an Immediate Assignment (downlink, seen), sends a <em>CM Service Request</em> (uplink), then the network runs Authentication and Ciphering (downlink, seen), and for SMS the text rides as <em>CP-DATA</em>. So the giveaway between “being called” and “placing a call” is simply: <strong>was there a paging first?</strong></p>
+  <div class="box exec"><span class="t">◆ In human terms</span> Incoming = the station <em>pages you</em>, then you step to the counter. Outgoing = you walk straight to the counter without being paged. Same counter, different trigger. cellcap sees the counter traffic (downlink) in both cases; the paging only appears for incoming.</div>
+</section>
+<!-- ==================================================================== -->
+<!-- PART V                                                                -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">PART V</div><h1>Wireshark</h1>
+  <p>Where the authoritative analysis happens. Opening captures, the filters that matter, and cross-checking cellcap against the dissector.</p>
+</div></section>
+
+<!-- Ch 23 -->
+<section class="chapter" id="ch-ws">
+  <h2><span class="chno">23</span> · Wireshark for cellular <span class="track t-b">B</span> <span class="track t-i">I</span></h2>
+  <p>Wireshark already understands GSM, GSMTAP, LTE and more — no plugins needed. Open a cellcap capture and you get the full protocol tree.</p>
+  <pre>scp 'root@host:/var/lib/cellcap/captures/*.pcapng' .
+wireshark cellcap-gsm-*.pcapng</pre>
+  <ul>
+    <li><strong>Packet list</strong> (top): one row per frame. The <em>Protocol</em> and <em>Info</em> columns mirror what cellcap’s live feed shows.</li>
+    <li><strong>Packet details</strong> (middle): the layer tree — GSMTAP → RR/MM/CC → fields. Expand to see every decoded element (the IMSI, the LAI, the cause…).</li>
+    <li><strong>Packet bytes</strong> (bottom): the raw hex, highlighted as you click fields — the view used throughout Chapter 21.</li>
+  </ul>
+  <h3>Three menus worth knowing</h3>
+  <table>
+    <thead><tr><th>Menu</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Telephony → GSM</strong></td><td>Ready-made summaries of the GSM traffic in the capture.</td></tr>
+      <tr><td><strong>Analyze → Decode As…</strong></td><td>Force a UDP port to be read as GSMTAP (e.g. if you mirror to a non-4729 port).</td></tr>
+      <tr><td><strong>Statistics → Protocol Hierarchy</strong></td><td>What message types dominate — the GUI equivalent of <code>cellcap inspect</code>.</td></tr>
+    </tbody>
+  </table>
+  <div class="box pro"><span class="t">▲ Pro tip — live over UDP</span> To watch cellcap’s UDP mirror live without saving first: <code>wireshark -k -i lo -Y gsmtap</code> on the capture host (frames arrive on loopback 4729), or the udpdump interface on a remote box (Chapter 14). The <code>!icmp &amp;&amp; gsmtap</code> filter people paste is just <code>gsmtap</code> with redundant noise-suppression — <code>!</code> negates only <code>icmp</code>.</div>
+</section>
+
+<!-- Ch 24 -->
+<section class="chapter" id="ch-filters">
+  <h2><span class="chno">24</span> · The display-filter cookbook <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>Display filters narrow what you see <em>after</em> capture. Combine with <code>&amp;&amp;</code> (and), <code>||</code> (or), <code>!</code> (not).</p>
+  <table>
+    <thead><tr><th>Filter</th><th>Shows</th></tr></thead>
+    <tbody>
+      <tr><td><code>gsmtap</code></td><td>All GSMTAP frames (everything cellcap emits).</td></tr>
+      <tr><td><code>gsmtap.arfcn == 11</code></td><td>One channel only.</td></tr>
+      <tr><td><code>gsmtap.chan_type == 1</code></td><td>BCCH only (System Information).</td></tr>
+      <tr><td><code>gsm_a.dtap.msg_rr_type == 0x21</code></td><td>Paging requests.</td></tr>
+      <tr><td><code>gsm_a.dtap.msg_rr_type == 0x3f</code></td><td>Immediate Assignments (channel grants).</td></tr>
+      <tr><td><code>gsm_a.dtap.msg_mm_type == 0x12</code></td><td>Authentication Requests.</td></tr>
+      <tr><td><code>gsm_a.dtap.msg_mm_type == 0x02</code></td><td>Location Updating Accepts.</td></tr>
+      <tr><td><code>gsm_a.imsi == "<i>your-imsi</i>"</code></td><td>Only your own device (from <code>sim-info</code>).</td></tr>
+      <tr><td><code>gsm_a.tmsi</code></td><td>Frames that carry a TMSI.</td></tr>
+      <tr><td><code>e212.imsi</code></td><td>Any frame exposing an IMSI (useful for spotting IMSI-in-the-clear).</td></tr>
+      <tr><td><code>gsm_a.rr.cipher_mode_setting</code></td><td>Ciphering Mode Commands — watch where encryption starts.</td></tr>
+      <tr><td><code>mac-lte</code></td><td>LTE downlink (from <code>cellcap lte</code>).</td></tr>
+    </tbody>
+  </table>
+  <h3>Validation workflow — “what I see vs what Wireshark sees”</h3>
+  <p>This is the discipline that turns watching into understanding:</p>
+  <ol>
+    <li>Run <code>cellcap run --arfcn N -i --gsmtap-udp HOST:5555</code>.</li>
+    <li>Watch an event scroll past in the Live feed — say <em>Paging · by IMSI + TMSI</em>.</li>
+    <li>Find the matching frame in Wireshark (filter <code>gsm_a.dtap.msg_rr_type == 0x21</code>).</li>
+    <li>Expand the tree: confirm the two Mobile Identity elements, the IMSI’s MCC/MNC, exactly as cellcap summarised.</li>
+    <li>When they agree, you have validated the whole chain — SDR, demod, GSMTAP, transport, and your reading of it.</li>
+  </ol>
+</section>
+
+<!-- ==================================================================== -->
+<!-- PART VI                                                               -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">PART VI</div><h1>Security, privacy &amp; law</h1>
+  <p>How encryption works and where it sits, how to recognise an attack, what a SIM can expose — and the rules you must follow.</p>
+</div></section>
+
+<!-- Ch 25 -->
+<section class="chapter" id="ch-crypto">
+  <h2><span class="chno">25</span> · Ciphering: A5, Kc and Ki <span class="track t-p">P</span></h2>
+  <p>GSM encrypts the radio link with the <strong>A5</strong> family of ciphers. Understanding the keys tells you exactly what you can and cannot decrypt — and why.</p>
+  <table>
+    <thead><tr><th>Cipher</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A5/0</strong></td><td>No encryption. The traffic is in the clear (seen in some networks/areas).</td></tr>
+      <tr><td><strong>A5/1</strong></td><td>The classic stream cipher. Broken academically (rainbow tables); still widely deployed.</td></tr>
+      <tr><td><strong>A5/2</strong></td><td>Deliberately weak (export); forbidden since 2006. Its presence is a red flag.</td></tr>
+      <tr><td><strong>A5/3</strong> (KASUMI)</td><td>Stronger; used more in 3G. GEA3 is the GPRS equivalent.</td></tr>
+    </tbody>
+  </table>
+  <h3>The key hierarchy</h3>
+  <ul>
+    <li><strong>Ki</strong> — the permanent 128-bit secret on the SIM and in the AuC. Never sent over the air. You cannot read it from a normal SIM.</li>
+    <li><strong>RAND</strong> — a random challenge the network sends (Authentication Request).</li>
+    <li><strong>Kc</strong> — the per-session cipher key, <em>derived</em> from Ki and RAND (via A3/A8) on both sides. This is what A5 actually uses.</li>
+  </ul>
+  <div class="box note"><span class="t">▶ Note — decrypting with cellcap</span> Wireshark cannot do A5; the <em>decoder</em> does. Supply the <strong>Kc</strong> (<code>decode --cipher-kc</code>), which you can read from a test SIM with <code>extract-kc</code>. You cannot use <strong>Ki</strong> directly — you would first have to derive Kc from Ki and the captured RAND. This is strictly for test SIMs and networks you are authorised to debug.</div>
+  <div class="box exec"><span class="t">◆ In human terms</span> Ki is the master key locked in a vault, never carried around. For each conversation the two sides mix the master key with a random number to make a one-time key (Kc) and lock the call with it. You can only unlock a recording if you legitimately hold that one-time key — which, for your own test SIM, you can.</div>
+</section>
+
+<!-- Ch 26 -->
+<section class="chapter" id="ch-imsicatch">
+  <h2><span class="chno">26</span> · IMSI catchers and how to spot them <span class="track t-p">P</span></h2>
+  <p>An <strong>IMSI catcher</strong> (“Stingray”) is a fake base station that lures phones into revealing their permanent identity and, classically, downgrading security. A passive receiver like cellcap is a natural detector — you are watching the same broadcast a victim phone would.</p>
+  <table>
+    <thead><tr><th>Tell-tale</th><th>Why it’s suspicious</th><th>Spot it in cellcap</th></tr></thead>
+    <tbody>
+      <tr><td>Unsolicited <strong>Identity Request (IMSI)</strong></td><td>A real network rarely needs your IMSI once you have a TMSI.</td><td>Event <em>Identity Request · asks for IMSI</em>.</td></tr>
+      <tr><td><strong>IMSI paging</strong> where TMSI is expected</td><td>Harvesting permanent identities.</td><td>Paging <em>by IMSI</em> (flagged “in the clear”).</td></tr>
+      <tr><td><strong>Cipher downgrade</strong> to A5/0 or A5/2</td><td>Forces the link into the clear.</td><td>Ciphering Mode Command <em>no ciphering</em> / A5/2.</td></tr>
+      <tr><td>A <strong>new cell</strong> with odd LAC, very strong signal, missing neighbours</td><td>A rogue cell tries to look attractive and isolate the phone.</td><td>Scan/Cells tab: unfamiliar CID/LAC, high dBm, sparse SI2.</td></tr>
+    </tbody>
+  </table>
+  <div class="box pro"><span class="t">▲ Pro tip</span> No single sign is proof — real networks do all of these occasionally. It is the <em>combination</em> and <em>context</em> (a brand-new strong cell suddenly demanding IMSIs and turning off ciphering) that matters. cellcap’s job is to surface the signals; judgement is yours.</div>
+</section>
+
+<!-- Ch 27 -->
+<section class="chapter" id="ch-simsec">
+  <h2><span class="chno">27</span> · The SIM/UICC attack surface <span class="track t-p">P</span></h2>
+  <p>The SIM is a tiny computer, and some of its features have been abused. <code>cellcap audit-sim</code> reads the SIM Service Table and reports which risky capabilities are present.</p>
+  <table>
+    <thead><tr><th>Attack</th><th>Abuses</th><th>Precondition you can audit</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Simjacker</strong></td><td>The S@T Browser applet via a silent SMS</td><td>Data download via SMS-PP + S@T present.</td></tr>
+      <tr><td><strong>WIBattack</strong></td><td>The Wireless Internet Browser applet</td><td>Data download via SMS-PP + WIB present.</td></tr>
+      <tr><td>OTA / remote management</td><td>Weak OTA keys (single-DES, low MSL)</td><td>OTA update capability enabled.</td></tr>
+      <tr><td>Proactive SIM / STK abuse</td><td>SIM Toolkit commands</td><td>Proactive SIM + call/SMS control services.</td></tr>
+    </tbody>
+  </table>
+  <div class="box warn"><span class="t">⚠ Capability ≠ vulnerability</span> <code>audit-sim</code> reports <em>flags</em>: that a feature is allocated and activated, which is the <em>precondition</em> for an attack’s delivery path. Whether the applet is actually installed, and how strong the OTA keys are, needs an active OTA test (e.g. SRLabs SIMtester). A met precondition means the SIM is <em>reachable</em>, not proven vulnerable.</div>
+</section>
+
+<!-- Ch 28 -->
+<section class="chapter" id="ch-legal">
+  <h2><span class="chno">28</span> · Privacy, personal data and the law <span class="track t-b">B</span> <span class="track t-p">P</span></h2>
+  <p>This chapter is not optional reading. cellcap is receive-only, but what you receive, record and decode is regulated.</p>
+  <div class="box danger"><span class="t">■ The essentials</span>
+  <ul style="margin:3pt 0 0">
+    <li>In many countries, intercepting or recording radio traffic you are not a party to — even passively — is a <strong>criminal offence</strong> without authorisation. This is independent of whether the content looks sensitive.</li>
+    <li>A capture <strong>contains other people’s personal data</strong>: paging carries TMSI and sometimes IMSI; both identify real subscribers. Treat capture files as personal data — keep them private, do not publish them, and use <code>--drop-paging</code> when you do not need identities.</li>
+    <li>Only work on a network you <strong>own</strong> or are <strong>explicitly authorised</strong> to test (your lab, a written engagement with the operator). When in doubt, assume you need permission.</li>
+    <li>Only read SIMs you own or are authorised to test; decryption is for your own test SIMs and authorised debugging.</li>
+    <li>cellcap is MIT-licensed and comes with <strong>no warranty</strong>. You, the operator, are responsible for compliance. Run <code>cellcap --disclaimer</code> for the in-tool notice; the full text is Appendix E.</li>
+  </ul></div>
+  <div class="box exec"><span class="t">◆ In human terms</span> Owning a scanner is legal; using it to eavesdrop on your neighbours is not. The radio waves pass through your home, but the conversations on them are not yours to keep. Authorisation is the line between research and crime — get it in writing.</div>
+</section>
+
+<!-- ==================================================================== -->
+<!-- PART VII                                                              -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">PART VII</div><h1>Beyond GSM</h1>
+  <p>Where 3G, 4G and 5G stand for passive capture — honestly. What cellcap orchestrates, and what simply isn’t reachable with affordable kit.</p>
+</div></section>
+
+<!-- Ch 29 -->
+<section class="chapter" id="ch-lte">
+  <h2><span class="chno">29</span> · LTE (4G) <span class="track t-i">I</span> <span class="track t-p">P</span></h2>
+  <p>LTE’s downlink <em>control plane</em> is reachable passively. cellcap drives <strong>LTESniffer</strong> (built on FALCON + srsRAN) to demodulate the PDCCH/DCI (and PDSCH where unciphered) and write a <strong>MAC-LTE pcap</strong> Wireshark reads directly.</p>
+  <pre>sudo cellcap lte --earfcn 1575          <span class="c"># band 3, 1842.5 MHz — or --freq</span>
+sudo cellcap lte --freq 806M --cell-id 379 --prb 100   <span class="c"># lock a known cell</span></pre>
+  <p>It writes <code>lte_dl_&lt;time&gt;.pcapng.pcap</code>; open it and filter <code>mac-lte</code>. <code>--earfcn</code> knows the common FDD bands (1–66). Downlink-only on a single B210-class SDR; uplink needs two time-synced SDRs and is out of scope.</p>
+  <table>
+    <thead><tr><th>GSM term</th><th>LTE equivalent</th></tr></thead>
+    <tbody>
+      <tr><td>BTS → BSC → MSC</td><td>eNodeB → (none) → EPC (MME/S-GW/P-GW)</td></tr>
+      <tr><td>ARFCN</td><td>EARFCN</td></tr>
+      <tr><td>Cell ID / BCCH</td><td>PCI + MIB/SIB</td></tr>
+      <tr><td>Paging / Immediate Assignment</td><td>Paging / DCI on the PDCCH</td></tr>
+      <tr><td>TMSI / IMSI</td><td>S-TMSI / GUTI / IMSI</td></tr>
+    </tbody>
+  </table>
+  <div class="box note"><span class="t">▶ Note</span> LTESniffer is GPL tooling kept out of the cellcap repo; build it with <code>tools/build-ltesniffer.sh</code>, then install it or set <code>CELLCAP_LTESNIFFER</code>. <code>cellcap check</code> reports whether it and the B210 FPGA image are present.</div>
+</section>
+
+<!-- Ch 30 -->
+<section class="chapter" id="ch-3g">
+  <h2><span class="chno">30</span> · 3G (UMTS) and why passive is hard <span class="track t-p">P</span></h2>
+  <p>3G is the gap. UMTS uses <strong>WCDMA</strong> — wideband code-division multiplexing — where every user’s signal is spread across the same 5&nbsp;MHz using orthogonal codes, summed on top of each other. Without the network’s scrambling/channelisation codes and tight power control, a passive receiver sees noise, not channels.</p>
+  <div class="box warn"><span class="t">⚠ Honest scope</span> There is <strong>no</strong> open-source passive WCDMA downlink sniffer, and the GSM/LTE tools do not transfer (different air interface). With a B210 you can <em>survey and record</em> 3G spectrum, but not decode the control plane. cellcap does not pretend otherwise.</div>
+  <div class="box exec"><span class="t">◆ In human terms</span> GSM is a room where people take turns speaking (you can note each turn). WCDMA is a cocktail party where everyone talks at once in different languages, and only someone with the right codebook can pick out a single voice. Without the codebook, it is a wall of sound.</div>
+</section>
+
+<!-- Ch 31 -->
+<section class="chapter" id="ch-5g">
+  <h2><span class="chno">31</span> · 5G (NR) <span class="track t-p">P</span></h2>
+  <p>5G NR is research-grade for passive work. The academic tool <strong>5GSniffer</strong> (Sprite Lab) is a PDCCH blind decoder — it recovers DCI and active RNTIs — built on srsRAN. It works best from a <strong>recorded I/Q file</strong>; live B210 capture is limited to narrow (~10 MHz) FDD carriers. It is not wired into cellcap; run it directly against a recording (<code>tools/build-5gsniffer.sh</code> builds it).</p>
+  <table>
+    <thead><tr><th>Generation</th><th>Passive capture, affordable SDR</th></tr></thead>
+    <tbody>
+      <tr><td>2G GSM</td><td><strong>Full</strong> — cellcap native.</td></tr>
+      <tr><td>4G LTE</td><td><strong>Downlink control plane</strong> — cellcap via LTESniffer.</td></tr>
+      <tr><td>5G NR</td><td><strong>Research</strong> — 5GSniffer, file-first, narrow FDD.</td></tr>
+      <tr><td>3G UMTS</td><td><strong>None</strong> — survey/record only.</td></tr>
+    </tbody>
+  </table>
+  <div class="box note"><span class="t">▶ Note — the throughline</span> Across every generation the <em>control-plane ideas</em> — identities, paging, channel grants, authentication, ciphering — recur. The hard part is always the physical layer; the concepts you learned for GSM in Part IV are what you reach for everywhere.</div>
+</section>
+<!-- ==================================================================== -->
+<!-- APPENDICES                                                            -->
+<!-- ==================================================================== -->
+<section class="part"><div class="part-band">
+  <div class="k">APPENDICES</div><h1>Reference</h1>
+  <p>A glossary, the message-type quick table, a command cheat-sheet, the standards and tools that underpin everything here, and the full legal disclaimer.</p>
+</div></section>
+
+<!-- Appendix A -->
+<section class="chapter" id="ap-glossary">
+  <h2>Appendix A · Glossary</h2>
+  <table>
+    <tbody>
+      <tr><td><strong>A5/0–3</strong></td><td>GSM ciphering algorithms for the radio link (A5/0 = none).</td></tr>
+      <tr><td><strong>AGCH</strong></td><td>Access Grant Channel — carries Immediate Assignment (downlink).</td></tr>
+      <tr><td><strong>ARFCN</strong></td><td>Absolute Radio-Frequency Channel Number — a 200 kHz GSM channel.</td></tr>
+      <tr><td><strong>AuC</strong></td><td>Authentication Centre — holds Ki, generates challenges.</td></tr>
+      <tr><td><strong>BCCH</strong></td><td>Broadcast Control Channel — the cell’s System Information.</td></tr>
+      <tr><td><strong>BSC / BTS</strong></td><td>Base Station Controller / Transceiver Station — the radio side.</td></tr>
+      <tr><td><strong>CCCH</strong></td><td>Common Control Channel — paging + access grant + random access.</td></tr>
+      <tr><td><strong>CC</strong></td><td>Call Control — L3 protocol for call setup/teardown (PD 0x03).</td></tr>
+      <tr><td><strong>CGI / CID</strong></td><td>Cell Global Identity / Cell ID — identifies a specific cell.</td></tr>
+      <tr><td><strong>CKSN</strong></td><td>Ciphering Key Sequence Number — indexes which Kc is in use.</td></tr>
+      <tr><td><strong>DCS1800 / PCS1900</strong></td><td>GSM bands at 1800/1900 MHz.</td></tr>
+      <tr><td><strong>DCI</strong></td><td>Downlink Control Information — the LTE PDCCH payload.</td></tr>
+      <tr><td><strong>DTAP</strong></td><td>Direct Transfer Application Part — L3 signalling carried end-to-end.</td></tr>
+      <tr><td><strong>EARFCN</strong></td><td>The LTE equivalent of ARFCN.</td></tr>
+      <tr><td><strong>EDGE</strong></td><td>Enhanced GPRS (“2.75G”) — faster packet data.</td></tr>
+      <tr><td><strong>eNodeB / gNodeB</strong></td><td>The LTE / 5G base station.</td></tr>
+      <tr><td><strong>FACCH</strong></td><td>Fast Associated Control Channel — urgent signalling by stealing traffic bursts.</td></tr>
+      <tr><td><strong>FDMA / TDMA</strong></td><td>Frequency / Time Division Multiple Access — GSM splits by both.</td></tr>
+      <tr><td><strong>GPRS</strong></td><td>General Packet Radio Service (“2.5G”) — packet data on GSM.</td></tr>
+      <tr><td><strong>GSMTAP</strong></td><td>The UDP envelope that carries decoded radio L3 to Wireshark.</td></tr>
+      <tr><td><strong>GUTI / S-TMSI</strong></td><td>LTE temporary identities (the TMSI’s successors).</td></tr>
+      <tr><td><strong>HLR / VLR</strong></td><td>Home / Visitor Location Register — subscriber databases.</td></tr>
+      <tr><td><strong>IMEI / IMEISV</strong></td><td>International Mobile Equipment Identity (+ Software Version) — the handset.</td></tr>
+      <tr><td><strong>IMSI</strong></td><td>International Mobile Subscriber Identity — the SIM/subscriber (MCC+MNC+MSIN).</td></tr>
+      <tr><td><strong>IQ / cfile</strong></td><td>Raw complex radio samples; a “cfile” is a recording of them.</td></tr>
+      <tr><td><strong>Kc / Ki</strong></td><td>Session cipher key / permanent SIM master key.</td></tr>
+      <tr><td><strong>LAC / LAI</strong></td><td>Location Area Code / Identity (MCC+MNC+LAC).</td></tr>
+      <tr><td><strong>LAPDm</strong></td><td>The L2 framing on GSM dedicated channels.</td></tr>
+      <tr><td><strong>MAC-LTE</strong></td><td>The LTE MAC layer; Wireshark’s dissector for LTESniffer output.</td></tr>
+      <tr><td><strong>MCC / MNC</strong></td><td>Mobile Country / Network Code — country &amp; operator (E.212).</td></tr>
+      <tr><td><strong>MM</strong></td><td>Mobility Management — L3 protocol for registration/identity (PD 0x05).</td></tr>
+      <tr><td><strong>MS / ME</strong></td><td>Mobile Station / Mobile Equipment — the phone (+SIM).</td></tr>
+      <tr><td><strong>MSIN / MSISDN</strong></td><td>Subscriber digits of the IMSI / the dialable phone number.</td></tr>
+      <tr><td><strong>MSC</strong></td><td>Mobile Switching Centre — the voice switch.</td></tr>
+      <tr><td><strong>NR</strong></td><td>New Radio — the 5G air interface.</td></tr>
+      <tr><td><strong>OFDMA</strong></td><td>Orthogonal Frequency-Division Multiple Access — the LTE/5G scheme.</td></tr>
+      <tr><td><strong>OTA</strong></td><td>Over-The-Air — remote SIM management (via SMS-PP).</td></tr>
+      <tr><td><strong>PCH</strong></td><td>Paging Channel (downlink).</td></tr>
+      <tr><td><strong>PCI</strong></td><td>Physical Cell Identity — the LTE cell identifier.</td></tr>
+      <tr><td><strong>PDCCH / PDSCH</strong></td><td>LTE Physical Downlink Control / Shared Channel.</td></tr>
+      <tr><td><strong>PDTCH</strong></td><td>Packet Data Traffic Channel — GPRS data.</td></tr>
+      <tr><td><strong>PLMN</strong></td><td>Public Land Mobile Network — an operator (MCC+MNC).</td></tr>
+      <tr><td><strong>PRB</strong></td><td>Physical Resource Block — the LTE bandwidth unit.</td></tr>
+      <tr><td><strong>RACH</strong></td><td>Random Access Channel — the phone requesting access (uplink).</td></tr>
+      <tr><td><strong>RAND / SRES</strong></td><td>Authentication challenge / response.</td></tr>
+      <tr><td><strong>RNTI</strong></td><td>Radio Network Temporary Identifier — an LTE/5G temporary ID.</td></tr>
+      <tr><td><strong>RR</strong></td><td>Radio Resource — L3 protocol for channels (PD 0x06).</td></tr>
+      <tr><td><strong>SACCH</strong></td><td>Slow Associated Control Channel — housekeeping alongside a dedicated channel.</td></tr>
+      <tr><td><strong>SDCCH</strong></td><td>Standalone Dedicated Control Channel — signalling before/without a call.</td></tr>
+      <tr><td><strong>SDR</strong></td><td>Software-Defined Radio.</td></tr>
+      <tr><td><strong>SIM / UICC</strong></td><td>Subscriber Identity Module / the smart card hosting it.</td></tr>
+      <tr><td><strong>SI 1–13</strong></td><td>System Information messages on BCCH/CCCH.</td></tr>
+      <tr><td><strong>S@T / WIB</strong></td><td>SIM applets abused by Simjacker / WIBattack.</td></tr>
+      <tr><td><strong>SGSN / GGSN</strong></td><td>GPRS core nodes (data path).</td></tr>
+      <tr><td><strong>TCH/F, TCH/H</strong></td><td>Traffic Channel, full / half rate — voice/data.</td></tr>
+      <tr><td><strong>TMSI</strong></td><td>Temporary Mobile Subscriber Identity — short-lived IMSI stand-in.</td></tr>
+      <tr><td><strong>UMTS / WCDMA</strong></td><td>3G and its wideband code-division air interface.</td></tr>
+      <tr><td><strong>Um</strong></td><td>The GSM air interface (MS ↔ BTS) — what cellcap receives.</td></tr>
+      <tr><td><strong>udpdump</strong></td><td>Wireshark’s UDP-listener capture interface (default port 5555).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Appendix B -->
+<section class="chapter" id="ap-msgref">
+  <h2>Appendix B · Message-type quick reference</h2>
+  <p>The two-byte key is <strong>protocol discriminator</strong> (low nibble of L3 byte 1) + <strong>message type</strong> (byte 2). RR uses the full type octet; MM/CC mask the low 6 bits.</p>
+  <table>
+    <thead><tr><th>PD</th><th>Type</th><th>Message</th><th>Dir</th></tr></thead>
+    <tbody>
+      <tr><td>RR 06</td><td>1B/1C/03/02…</td><td>System Information 3 / 4 / 2 / 2bis…</td><td>↓</td></tr>
+      <tr><td>RR 06</td><td>21 / 22 / 24</td><td>Paging Request Type 1 / 2 / 3</td><td>↓</td></tr>
+      <tr><td>RR 06</td><td>3F</td><td>Immediate Assignment</td><td>↓</td></tr>
+      <tr><td>RR 06</td><td>35 / 32</td><td>Ciphering Mode Command / Complete</td><td>↓ / ↑</td></tr>
+      <tr><td>RR 06</td><td>2E / 29 / 2F</td><td>Assignment Command / Complete / Failure</td><td>↓ / ↑</td></tr>
+      <tr><td>RR 06</td><td>0D</td><td>Channel Release</td><td>↓</td></tr>
+      <tr><td>MM 05</td><td>08 / 02 / 04</td><td>Location Updating Request / Accept / Reject</td><td>↑ / ↓ / ↓</td></tr>
+      <tr><td>MM 05</td><td>12 / 14 / 1C</td><td>Authentication Request / Response / Reject</td><td>↓ / ↑ / ↓</td></tr>
+      <tr><td>MM 05</td><td>18 / 19</td><td>Identity Request / Response</td><td>↓ / ↑</td></tr>
+      <tr><td>MM 05</td><td>1A / 1B</td><td>TMSI Reallocation Command / Complete</td><td>↓ / ↑</td></tr>
+      <tr><td>MM 05</td><td>24 / 21 / 22</td><td>CM Service Request / Accept / Reject</td><td>↑ / ↓ / ↓</td></tr>
+      <tr><td>MM 05</td><td>32</td><td>MM Information (network name, time)</td><td>↓</td></tr>
+      <tr><td>CC 03</td><td>05 / 02 / 01</td><td>Setup / Call Proceeding / Alerting</td><td>↕</td></tr>
+      <tr><td>CC 03</td><td>07 / 0F</td><td>Connect / Connect Acknowledge</td><td>↕</td></tr>
+      <tr><td>CC 03</td><td>25 / 2D / 2A</td><td>Disconnect / Release / Release Complete</td><td>↕</td></tr>
+      <tr><td>SMS 09</td><td>01 / 04 / 10</td><td>CP-DATA / CP-ACK / CP-ERROR</td><td>↕</td></tr>
+    </tbody>
+  </table>
+  <p><small>↓ downlink (cellcap-visible) · ↑ uplink (inferred) · ↕ both directions depending on call leg.</small></p>
+</section>
+
+<!-- Appendix C -->
+<section class="chapter" id="ap-cheat">
+  <h2>Appendix C · cellcap command cheat sheet</h2>
+  <pre><span class="k">cellcap</span>                         <span class="c"># open the interactive control panel</span>
+<span class="k">cellcap check</span>                   <span class="c"># preflight: tools + SDR, ✓/✗</span>
+<span class="k">cellcap --disclaimer</span>            <span class="c"># print the legal/ethical notice</span>
+
+<span class="c"># Scan</span>
+<span class="k">cellcap scan</span> [--band GSM900] [--device uhd]
+
+<span class="c"># Capture (GSM)</span>
+<span class="k">cellcap run</span> --arfcn 11 --output-dir .
+<span class="k">cellcap run</span> --plmn 23801                 <span class="c"># scan+pick one network</span>
+<span class="k">cellcap run</span> --arfcn 11 -i                 <span class="c"># live dashboard</span>
+<span class="k">cellcap run</span> --arfcn 11 --stream           <span class="c"># one line per message</span>
+<span class="k">cellcap run</span> --arfcn 11 --no-write --gsmtap-udp 172.22.22.20:5555  <span class="c"># mirror to remote Wireshark</span>
+
+<span class="c"># Capture (LTE) — needs root + B210</span>
+<span class="k">sudo cellcap lte</span> --earfcn 1575
+<span class="k">sudo cellcap lte</span> --freq 806M --cell-id 379 --prb 100
+
+<span class="c"># Decode a dedicated / ciphered channel</span>
+<span class="k">cellcap decode</span> --arfcn 11 --mode sdcch8 --timeslot 1
+<span class="k">cellcap decode</span> --arfcn 11 --mode sdcch8 --timeslot 1 --cipher-a5 1 --cipher-kc &lt;HEX&gt;
+
+<span class="c"># SIM (serial modem)</span>
+<span class="k">cellcap extract-kc</span> /dev/ttyUSB0
+<span class="k">cellcap sim-info</span>   /dev/ttyUSB0
+<span class="k">cellcap audit-sim</span>  /dev/ttyUSB0
+
+<span class="c"># Read a capture back</span>
+<span class="k">cellcap inspect</span> capture.pcapng
+
+<span class="c"># Watch the UDP mirror live in Wireshark</span>
+wireshark -k -i lo -Y gsmtap                 <span class="c"># on the capture host (port 4729)</span>
+tshark -i udpdump -o extcap.udpdump.payload:gsmtap   <span class="c"># remote udpdump on 5555</span></pre>
+</section>
+
+<!-- Appendix D -->
+<section class="chapter" id="ap-refs">
+  <h2>Appendix D · Standards, tools &amp; further reading</h2>
+
+  <h3>The tools in this guide</h3>
+  <table>
+    <thead><tr><th>Tool</th><th>What</th><th>Link</th></tr></thead>
+    <tbody>
+      <tr><td>cellcap</td><td>This tool</td><td>github.com/kawaiipantsu/cellcap · thugs.red</td></tr>
+      <tr><td>gr-gsm</td><td>GSM demodulation</td><td>github.com/ptrkrysik/gr-gsm</td></tr>
+      <tr><td>Osmocom</td><td>Open-source mobile comms (gr-gsm’s ecosystem, libosmocore/GSMTAP)</td><td>osmocom.org</td></tr>
+      <tr><td>Wireshark</td><td>Protocol analyser</td><td>wireshark.org · wiki.wireshark.org/GSMTAP</td></tr>
+      <tr><td>LTESniffer</td><td>LTE downlink sniffer</td><td>github.com/SysSec-KAIST/LTESniffer</td></tr>
+      <tr><td>FALCON / srsRAN</td><td>LTE PHY libraries LTESniffer builds on</td><td>github.com/falkenber9/falcon · github.com/srsran/srsRAN_4G</td></tr>
+      <tr><td>5GSniffer</td><td>5G NR PDCCH decoder</td><td>github.com/spritelab/5GSniffer</td></tr>
+      <tr><td>UHD</td><td>USRP/B210 driver</td><td>files.ettus.com · github.com/EttusResearch/uhd</td></tr>
+      <tr><td>SRLabs tools</td><td>SIMtester, gsmmap, A5/1 cracking</td><td>srlabs.de · opensource.srlabs.de</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Primary standards (3GPP / ITU)</h3>
+  <p>The specifications are free at <strong>3gpp.org</strong> (and portal.3gpp.org). The ones you will reach for:</p>
+  <table>
+    <thead><tr><th>Spec</th><th>Covers</th></tr></thead>
+    <tbody>
+      <tr><td>TS 24.008</td><td>L3 — Mobility Management &amp; Call Control messages (the message types in Appendix B).</td></tr>
+      <tr><td>TS 44.018 (was 04.18)</td><td>L3 — Radio Resource: System Information, Paging, Immediate Assignment, Ciphering.</td></tr>
+      <tr><td>TS 44.006</td><td>L2 — LAPDm framing.</td></tr>
+      <tr><td>TS 45.002 / 45.00x</td><td>L1 — multiplexing, bursts, the logical-channel layout.</td></tr>
+      <tr><td>TS 23.003</td><td>Identities: IMSI, TMSI, IMEI, LAI numbering.</td></tr>
+      <tr><td>TS 51.011 / 31.102</td><td>SIM / USIM files (EF_IMSI, EF_Kc, EF_LOCI, SIM Service Table).</td></tr>
+      <tr><td>TS 27.007</td><td>AT commands (AT+CRSM) — how cellcap reads the SIM.</td></tr>
+      <tr><td>ITU-T E.212</td><td>MCC/MNC assignment (the operator-name mapping).</td></tr>
+      <tr><td>TS 36.xxx (LTE), TS 38.xxx (5G NR)</td><td>The 4G and 5G radio specifications.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Further reading</h3>
+  <ul>
+    <li><strong>Osmocom wiki</strong> — practical GSM/GPRS internals, GSMTAP channel types, the whole open mobile stack. <code>osmocom.org</code></li>
+    <li><strong>Wireshark GSMTAP &amp; GSM pages</strong> — dissector details and sample captures. <code>wiki.wireshark.org</code></li>
+    <li><strong>gr-gsm wiki</strong> — decoding how-tos (BCCH, SDCCH, TCH), the basis for cellcap’s decode modes. <code>github.com/ptrkrysik/gr-gsm/wiki</code></li>
+    <li><strong>SRLabs “GSM Security Map” (gsmmap)</strong> — how operators compare on A5/encryption. <code>gsmmap.org</code></li>
+    <li><strong>Simjacker (AdaptiveMobile) &amp; WIBattack (Ginno)</strong> — the SIM-applet attacks behind <code>audit-sim</code>.</li>
+    <li><strong>LTESniffer &amp; 5GSniffer papers</strong> — the research behind the LTE/5G tooling (linked from their repos).</li>
+    <li><strong>rtl-sdr.com</strong> — SDR hardware, drivers, tutorials.</li>
+  </ul>
+  <div class="box note"><span class="t">▶ Note</span> Bare domains are given rather than deep links so they survive site reorganisations; search the tool/spec name on the domain to reach the current page.</div>
+</section>
+
+<!-- Appendix E -->
+<section class="chapter" id="ap-disclaimer">
+  <h2>Appendix E · Full disclaimer</h2>
+  <div class="box danger"><span class="t">■ cellcap — disclaimer</span>
+  <p>cellcap is a <strong>passive receiver</strong>. It never transmits, and it only decodes the downlink that base stations already broadcast over the air. Even so, how you may receive, record, decode, decrypt and store cellular traffic is regulated, and in many countries doing so without authorisation is a criminal offence — regardless of whether the content looks sensitive.</p>
+  <p><strong>By using cellcap you confirm that:</strong></p>
+  <ul>
+    <li>You have the authorisation you need to receive and record the traffic in your location — your own test network, a lab, or a written engagement with the operator. When in doubt, assume you need permission.</li>
+    <li>You will only read SIM/UICC cards (<code>extract-kc</code>, <code>sim-info</code>, <code>audit-sim</code>) that you own or are explicitly authorised to test, with known test keys.</li>
+    <li>You understand that a capture can contain other people’s identifiers — paging carries temporary (TMSI) and sometimes permanent (IMSI) identities, which are personal data. Keep capture files private, do not publish them, and use <code>--drop-paging</code> when you do not need them. Deciphering other people’s traffic without authorisation is not lawful anywhere the authors are aware of.</li>
+    <li>You, the operator, are solely responsible for complying with the laws and regulations that apply to you. Decryption features (A5 via a known Kc) are for authorised debugging of networks and test SIMs you are permitted to work with.</li>
+  </ul>
+  <p>cellcap is provided under the MIT licence, <strong>without warranty of any kind</strong>. The authors accept no liability for how it is used. If you are not sure whether something is permitted where you are, do not run it until you have checked.</p>
+  <p style="margin-bottom:0">This training guide is educational material for the same authorised, lawful use. — THUGSred · https://thugs.red</p>
+  </div>
+  <p style="text-align:center;color:#8a90a0;font-size:8.5pt;margin-top:20pt">— End of guide —<br>cellcap Field Guide v1.0 · for cellcap v1.2.0 · © 2026 THUGSred · https://thugs.red</p>
+</section>
+
+</body>
+</html>

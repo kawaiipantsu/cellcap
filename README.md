@@ -11,6 +11,10 @@ pcapng files you open in Wireshark. **It only ever listens — it never transmit
 Everything is driven from one place: run `cellcap` with no arguments for an interactive
 **control panel**, or call any mode directly from the command line for scripts and the service.
 
+> 📖 **New to this?** A complete 56-page training manual — foundations, every mode, packet
+> dissection, flow chains, Wireshark, security and a glossary, for beginners to professionals —
+> is in **[`docs/manual/manual.pdf`](docs/manual/manual.pdf)** ([how to rebuild](docs/manual/)).
+
 <p align="center"><img src="docs/img/ui-home.png" alt="cellcap control panel" width="860"></p>
 
 ---
