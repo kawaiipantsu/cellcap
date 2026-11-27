@@ -156,8 +156,34 @@ by **kind only** (TMSI/IMSI), never by value.
 
 Main options: `--freq`/`--arfcn` (channel; without either, cellcap scans), `--band`, `--cells`,
 `--plmn`, `--dwell`, `--device` (`rtl=0`/`hackrf=0`/`uhd`), `--gain`, `--ppm`, `--output-dir`,
-`--rotate-minutes`/`--rotate-mb`, `--max-total-mb`, `--drop-paging`, `-i`/`--stream`/`--no-write`.
-One SDR receives one channel at a time, so several channels are captured in turn.
+`--rotate-minutes`/`--rotate-mb`, `--max-total-mb`, `--drop-paging`, `-i`/`--stream`/`--no-write`,
+`--gsmtap-udp`. One SDR receives one channel at a time, so several channels are captured in turn.
+
+### Live remote Wireshark — `--gsmtap-udp`
+
+Instead of (or as well as) writing pcapng, cellcap can **mirror every GSMTAP frame to a remote
+UDP address**, so you watch the capture live in Wireshark on another machine — handy when the SDR
+host (e.g. a DMZ box) has no GUI.
+
+```bash
+# Mirror to a remote Wireshark, without saving files locally:
+cellcap run --arfcn 11 --no-write --gsmtap-udp 172.22.22.20:5555
+
+# Or capture to disk AND mirror at the same time:
+cellcap run --arfcn 11 --gsmtap-udp 172.22.22.20:4729
+```
+
+cellcap sends the **raw GSMTAP datagrams**; set up the receiving Wireshark one of two ways:
+
+- **udpdump listener (port 5555).** On the Wireshark host, start the **`udpdump`** capture
+  interface (Capture → Options → *udpdump*) and set its **Payload type to `gsmtap`** (the default
+  is `data`, which would show the frames undissected). Then `--gsmtap-udp <host>:5555`.
+- **Direct on port 4729.** Capture on the normal network interface and filter `udp.port == 4729`;
+  Wireshark auto-dissects GSMTAP on its registered port. Then `--gsmtap-udp <host>:4729`.
+
+`--gsmtap-udp` respects `--drop-paging` (dropped frames are not mirrored). Remember the frames
+cross the network in the clear — only mirror to a host and network you control, and see the
+**Disclaimer**.
 
 ### Capture LTE — `cellcap lte`
 

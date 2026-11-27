@@ -33,6 +33,9 @@ pub struct Options {
     /// Restart the decoder when nothing arrives for this long.
     pub stall: Duration,
     pub drop_paging: bool,
+    /// Mirror each GSMTAP frame to this remote UDP address (for a live
+    /// Wireshark on another host), as well as or instead of writing files.
+    pub forward: Option<std::net::SocketAddr>,
 }
 
 /// Where the capture loop sends what it sees.
@@ -184,6 +187,19 @@ pub fn run(
         w.prune();
     }
 
+    // Optional remote mirror: a UDP socket that re-emits each GSMTAP frame to a
+    // Wireshark on another host (directly on port 4729, or via its udpdump
+    // listener). Set up once; a failure here is fatal so the operator notices.
+    let forward = match o.forward {
+        Some(addr) => {
+            let s = UdpSocket::bind(("0.0.0.0", 0))?;
+            s.connect(addr)?;
+            rep.info(&format!("mirroring GSMTAP to {addr} (open it in Wireshark)"));
+            Some(s)
+        }
+        None => None,
+    };
+
     while !crate::stopping() {
         if targets.is_empty() {
             targets = pick(radio, socket, &mut rep, o)?;
@@ -258,6 +274,11 @@ pub fn run(
             if o.drop_paging && kind == Kind::Paging {
                 stats.dropped += 1;
                 continue;
+            }
+            if let Some(f) = &forward {
+                // Re-emit the raw GSMTAP datagram; a send error (e.g. host gone)
+                // must not stop the capture.
+                let _ = f.send(frame);
             }
             if let Some(w) = writer.as_deref_mut() {
                 w.write(pcapng::now_micros(), frame)?;

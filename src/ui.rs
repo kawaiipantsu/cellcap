@@ -128,6 +128,7 @@ fn actions() -> Vec<Action> {
                 Field::text("--plmn", "PLMN filter", "", "after a scan, only this MCCMNC, e.g. 23801"),
                 Field::text("--dwell", "Dwell seconds", "120", "time per channel when cycling"),
                 Field::text("--output-dir", "Output dir", "/var/lib/cellcap/captures", "where pcapng files go"),
+                Field::text("--gsmtap-udp", "Mirror to UDP", "", "live remote Wireshark, e.g. 172.22.22.20:4729"),
                 Field::flag("--no-write", "Watch only (don't save)", false, "stream without writing files"),
                 Field::flag("--drop-paging", "Drop paging", false, "leave others' paging identities out"),
             ],

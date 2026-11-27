@@ -25,7 +25,7 @@ mod ui;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use std::io::IsTerminal;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -242,6 +242,10 @@ enum Command {
         /// or permanent identities of other subscribers.
         #[arg(long)]
         drop_paging: bool,
+        /// Also mirror every GSMTAP frame to a remote UDP address for a live
+        /// Wireshark, e.g. 172.22.22.20:4729 (direct) or :5555 (udpdump listener)
+        #[arg(long = "gsmtap-udp", value_name = "HOST:PORT", value_parser = parse_forward)]
+        gsmtap_udp: Option<SocketAddr>,
     },
 }
 
@@ -339,6 +343,14 @@ fn banner(color: bool) -> String {
         }
     }
     plain
+}
+
+/// Resolve a `HOST:PORT` string to a socket address for `--gsmtap-udp`.
+fn parse_forward(s: &str) -> Result<SocketAddr> {
+    s.to_socket_addrs()
+        .with_context(|| format!("'{s}' is not a HOST:PORT I can resolve"))?
+        .next()
+        .ok_or_else(|| anyhow!("'{s}' resolved to no address"))
 }
 
 fn socket(port: u16) -> Result<UdpSocket> {
@@ -550,9 +562,10 @@ fn main() -> Result<()> {
             interactive,
             stream,
             no_write,
+            gsmtap_udp,
         } => {
-            if no_write && !(interactive || stream) {
-                bail!("--no-write without --interactive or --stream would capture nothing and show nothing");
+            if no_write && !(interactive || stream || gsmtap_udp.is_some()) {
+                bail!("--no-write without --interactive, --stream or --gsmtap-udp would capture nothing and show nothing");
             }
             if interactive && stream {
                 bail!("--interactive and --stream are two ways to watch; choose one");
@@ -594,6 +607,7 @@ fn main() -> Result<()> {
                 dwell: Duration::from_secs(dwell.max(10)),
                 stall: Duration::from_secs(stall_seconds.max(10)),
                 drop_paging,
+                forward: gsmtap_udp,
             };
             if interactive {
                 let model = Arc::new(model::Model::new(r.device.clone(), output));
