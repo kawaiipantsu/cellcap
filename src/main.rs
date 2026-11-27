@@ -8,6 +8,7 @@ mod atmodem;
 mod capture;
 mod check;
 mod decode;
+mod disclaimer;
 mod freq;
 mod gsmtap;
 mod inspect;
@@ -19,6 +20,7 @@ mod radio;
 mod scan;
 mod simaudit;
 mod tui;
+mod ui;
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
@@ -55,7 +57,10 @@ pub fn banner_plain() -> String {
 )]
 struct Cli {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
+    /// Print the legal/ethical disclaimer and exit
+    #[arg(long, global = true)]
+    disclaimer: bool,
 }
 
 #[derive(Subcommand)]
@@ -73,6 +78,10 @@ enum Command {
         #[arg(value_name = "FILE", required = true)]
         files: Vec<PathBuf>,
     },
+    /// Open the interactive control panel (the default when no command is given)
+    Ui,
+    /// Print the legal/ethical disclaimer
+    Disclaimer,
     /// Check that the required tools and an SDR are present (a ✓/✗ checklist)
     Check,
     /// Read the SIM's current session key Kc from a serial GSM modem (AT+CRSM)
@@ -348,7 +357,21 @@ fn main() -> Result<()> {
     }
     let _ = STOP.set(stop);
 
-    match cli.command {
+    // `--disclaimer` (global flag) prints and exits, whatever else was given.
+    if cli.disclaimer {
+        disclaimer::print();
+        return Ok(());
+    }
+
+    // No subcommand (bare `cellcap`), or `cellcap ui`: the interactive control panel.
+    let command = match cli.command {
+        None | Some(Command::Ui) => return ui::run(),
+        Some(c) => c,
+    };
+
+    match command {
+        Command::Ui => unreachable!("handled above"),
+        Command::Disclaimer => disclaimer::print(),
         Command::Scan { radio, scan } => {
             let r = radio.radio();
             let s = socket(r.port)?;
