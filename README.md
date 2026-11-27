@@ -207,10 +207,18 @@ cellcap audit-sim /dev/ttyUSB0
 
 reads the SIM Service Table (EF_SST) and reports the toolkit and OTA features that make up
 the attack surface for known SIM/UICC attacks — above all **Data download via SMS-PP**, the
-precondition for Simjacker and WIBattack. These are capability flags, not proof: whether the
-S@T Browser or WIB applet is installed and how strong the OTA keys are can only be told by an
-active test (e.g. SRLabs SIMTester). A flagged service is a precondition for the matching
-attack, not a confirmation of it.
+precondition for Simjacker and WIBattack. It then maps a catalogue of known attacks:
+
+- **UICC attacks** (Simjacker, WIBattack, Rooting SIM Cards, MONKEYCALENDAR, GOPHERSET, SIM
+  Toolkit Attack, STK auto-reply) — whether the SIM's *delivery preconditions* are met.
+- **Device/OS attacks** (WAP push, OMA CP, class-0 SMS, Curse of Silence, malformed UDH/vCard,
+  MMS notification, …) — listed as **not determinable from the SIM**: these are handset, OS or
+  baseband flaws found by observing inbound traffic, not by reading a card.
+
+These are capability flags, not proof: whether the S@T Browser / WIB / STK applet is installed
+and how strong the OTA keys are (MSL, single-DES vs AES) can only be told by an active OTA test
+(e.g. SRLabs SIMtester). A met precondition means the SIM is *reachable* by the attack's
+delivery path, not that it is vulnerable.
 
 > The modem may be in use by another program (e.g. an SMS gateway); stop that first so the
 > port is free. `ModemManager` can also hold modems.

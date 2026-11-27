@@ -83,6 +83,227 @@ const CHECKS: &[Check] = &[
     },
 ];
 
+/// Where an attack lives, and so whether a SIM read can speak to it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Surface {
+    /// On the card itself — a SIM read can check its preconditions.
+    Uicc,
+    /// On the handset, OS or baseband — not visible from the SIM.
+    DeviceOs,
+}
+
+/// A known SMS/UICC attack from the catalogue. For UICC attacks, `needs` lists
+/// the EF_SST services that must be active for the SIM to be reachable by it,
+/// and `confirm` says what an active test would still have to establish.
+struct Attack {
+    name: &'static str,
+    year: &'static str,
+    surface: Surface,
+    needs: &'static [usize],
+    confirm: &'static str,
+}
+
+const ATTACKS: &[Attack] = &[
+    // --- UICC: the SIM read can check delivery preconditions. ---
+    Attack {
+        name: "Simjacker",
+        year: "2019",
+        surface: Surface::Uicc,
+        needs: &[26, 29],
+        confirm: "S@T Browser applet installed (needs applet enumeration / active OTA test)",
+    },
+    Attack {
+        name: "WIBattack",
+        year: "2019",
+        surface: Surface::Uicc,
+        needs: &[26, 29],
+        confirm: "WIB applet installed (active OTA test)",
+    },
+    Attack {
+        name: "Rooting SIM Cards (weak OTA keys)",
+        year: "2013",
+        surface: Surface::Uicc,
+        needs: &[26],
+        confirm: "weak OTA keys (single DES) — active OTA signature test, e.g. SIMtester",
+    },
+    Attack {
+        name: "MONKEYCALENDAR (STK implant)",
+        year: "2013",
+        surface: Surface::Uicc,
+        needs: &[26, 29],
+        confirm: "a planted STK applet exfiltrating via SMS (applet enumeration)",
+    },
+    Attack {
+        name: "GOPHERSET (STK implant)",
+        year: "2013",
+        surface: Surface::Uicc,
+        needs: &[26, 29],
+        confirm: "a planted STK applet exfiltrating via SMS (applet enumeration)",
+    },
+    Attack {
+        name: "SIM Toolkit Attack",
+        year: "2011",
+        surface: Surface::Uicc,
+        needs: &[29, 26],
+        confirm: "a malicious STK applet (applet enumeration)",
+    },
+    Attack {
+        name: "SMS auto-reply (STK)",
+        year: "2010",
+        surface: Surface::Uicc,
+        needs: &[29, 26],
+        confirm: "an STK auto-reply applet (applet enumeration)",
+    },
+    // --- Device/OS: handset, OS or baseband — not visible from a SIM read. ---
+    Attack {
+        name: "OMA CP provisioning phishing",
+        year: "2019",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Visual Voicemail IMAP attack",
+        year: "2019",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Samsung WAP Push / OMA CP",
+        year: "2017",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "PINGSMS 2.0",
+        year: "2015",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "CoreTelephony Class 0 SMS",
+        year: "2015",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "iPhone Springboard Class 0 SMS",
+        year: "2014",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Android Nexus Class 0 SMS",
+        year: "2013",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "SIM bricking (Android)",
+        year: "2012",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "iOS text spoofing",
+        year: "2012",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Samsung WAP Push",
+        year: "2012",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "SMS of Death",
+        year: "2010",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Fuzzing the Phone in your Phone",
+        year: "2009",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "TAFT / spoofed MMS notification",
+        year: "2009",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Windows Mobile 5/6 WAP Push",
+        year: "2009",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "SonyEricsson WAP Push",
+        year: "2009",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Curse of Silence",
+        year: "2008",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Hijacking Mobile Data Connections",
+        year: "2008",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Hide Sender Field (Windows Mobile)",
+        year: "2007",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Siemens 45 long image name",
+        year: "2003",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Nokia 6210 malformed vCard",
+        year: "2003",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+    Attack {
+        name: "Nokia malformed SMS UDH",
+        year: "2001",
+        surface: Surface::DeviceOs,
+        needs: &[],
+        confirm: "",
+    },
+];
+
 /// Whether service `n` (1-based) is allocated and activated in an EF_SST body.
 /// Two bits per service: bit 0 allocated, bit 1 activated.
 fn available(table: &[u8], n: usize) -> Option<bool> {
@@ -164,14 +385,72 @@ pub fn run(path: &Path, baud: u32) -> Result<()> {
         )
     };
     println!("{verdict}");
+
+    // UICC attacks: report whether the SIM's delivery preconditions are met.
+    println!(
+        "\n{}",
+        paint(BOLD, "Known UICC attacks — SIM-side preconditions")
+    );
+    let met = |needs: &[usize]| needs.iter().all(|&n| available(&table, n).unwrap_or(false));
+    for a in ATTACKS.iter().filter(|a| a.surface == Surface::Uicc) {
+        let present = met(a.needs);
+        let (glyph, col) = if present {
+            ("[!!]", RED)
+        } else {
+            ("[ok]", GREEN)
+        };
+        let needs: Vec<String> = a.needs.iter().map(|n| format!("svc {n}")).collect();
+        let status = if present {
+            format!(
+                "precondition MET ({}) — to confirm: {}",
+                needs.join("+"),
+                a.confirm
+            )
+        } else {
+            format!("precondition absent ({} not active)", needs.join("+"))
+        };
+        println!(
+            "  {}  {} {}",
+            paint(col, glyph),
+            paint(
+                if present { BOLD } else { DIM },
+                &format!("{:<34}", format!("{} ({})", a.name, a.year))
+            ),
+            paint(DIM, &status)
+        );
+    }
+
+    // Device/OS attacks: a SIM read cannot speak to these at all.
+    println!(
+        "\n{}",
+        paint(BOLD, "Device/OS attacks — not determinable from the SIM")
+    );
     println!(
         "{}",
         paint(
             DIM,
-            "Note: these are capability flags, not proof of exploitability. The S@T Browser / WIB\n\
-             applet presence and the OTA key strength (MSL, DES vs AES) can only be told by an\n\
-             active OTA test such as SRLabs SIMTester. A flagged service is a precondition for the\n\
-             matching attack, not a confirmation."
+            "  Handset, OS or baseband flaws in how SMS/WAP-push/OMA-CP/MMS are parsed. A card read\n\
+             says nothing about them; they are found by observing inbound traffic against a target\n\
+             device. Listed here only so the audit's scope is clear:"
+        )
+    );
+    let names: Vec<String> = ATTACKS
+        .iter()
+        .filter(|a| a.surface == Surface::DeviceOs)
+        .map(|a| format!("{} ({})", a.name, a.year))
+        .collect();
+    for chunk in names.chunks(2) {
+        println!("    {}", paint(DIM, &chunk.join("   ·   ")));
+    }
+
+    println!(
+        "\n{}",
+        paint(
+            DIM,
+            "Note: EF_SST flags are capability preconditions, not proof of exploitability. Confirming\n\
+             an installed S@T/WIB/STK applet or weak OTA keys (MSL, single-DES vs AES) needs an active\n\
+             OTA test such as SRLabs SIMtester. A met precondition means the SIM can be reached by the\n\
+             attack's delivery path, not that it is vulnerable."
         )
     );
     Ok(())
