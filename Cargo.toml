@@ -1,0 +1,19 @@
+[package]
+name = "cellcap"
+version = "0.1.0"
+edition = "2021"
+description = "Passive cellular capture daemon: finds GSM cells, decodes their broadcast channels with gr-gsm and writes Wireshark pcapng files"
+license = "MIT"
+publish = false
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+ratatui = "0.29"
+signal-hook = "0.3"
+
+[profile.release]
+lto = true
+strip = true

@@ -1,0 +1,38 @@
+[Unit]
+Description=cellcap - passive cellular capture for Wireshark
+Documentation=file:///usr/local/share/doc/cellcap/README.md
+After=network.target
+
+[Service]
+Type=simple
+User=cellcap
+Group=cellcap
+# Access to the SDR's USB device node (udev rules of librtlsdr / libhackrf).
+SupplementaryGroups=plugdev
+EnvironmentFile=-/etc/default/cellcap
+# GNU Radio keeps preferences and caches under $HOME.
+Environment=HOME=/var/lib/cellcap
+WorkingDirectory=/var/lib/cellcap
+ExecStart=/usr/local/bin/cellcap run $CELLCAP_ARGS
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=20
+KillMode=control-group
+
+StateDirectory=cellcap
+StateDirectoryMode=0750
+UMask=0027
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+# Arguments for "cellcap run" (see: cellcap run --help).
+#
+# With no --freq or --arfcn, cellcap scans the band and captures the strongest
+# cell it can decode. Examples:
+#
+#   CELLCAP_ARGS="--device rtl=0"                          scan, strongest cell
+#   CELLCAP_ARGS="--device rtl=0 --plmn 23801 --cells 2"   two cells of one network
+#   CELLCAP_ARGS="--device rtl=0 --freq 937.2M"            one fixed channel
+#   CELLCAP_ARGS="--device hackrf=0 --band DCS1800"        HackRF, 1800 MHz band
+#
+# Add --drop-paging to leave other subscribers' identities out of the captures.
+CELLCAP_ARGS="--device rtl=0"

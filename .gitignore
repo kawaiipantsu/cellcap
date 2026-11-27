@@ -1,0 +1,6 @@
+/target
+/captures
+*.pcapng
+*.pcap
+*.cfile
+cellcap-decode
