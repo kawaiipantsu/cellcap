@@ -111,6 +111,10 @@ fn tone_colour(tone: crate::live::Tone) -> Color {
         Assignment => Color::Gray,
         Paging => Color::Yellow,
         Alert => Color::LightRed,
+        Signalling => Color::LightBlue,
+        Security => Color::LightMagenta,
+        Sms => Color::LightGreen,
+        Call => Color::LightCyan,
     }
 }
 
@@ -418,6 +422,11 @@ fn feed_line(l: &FeedLine) -> Line<'static> {
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
+            format!("{:<9}", crate::inspect::channel_name(l.chan)),
+            Style::default().fg(Color::Rgb(120, 120, 140)),
+        ),
+        Span::raw(" "),
+        Span::styled(
             format!("{:<24}", l.label),
             Style::default().fg(tone_colour(l.tone)),
         ),
@@ -442,7 +451,7 @@ fn live(f: &mut Frame, snap: &Snapshot, area: Rect) {
 }
 
 fn cells(f: &mut Frame, snap: &Snapshot, area: Rect) {
-    let header = Row::new(["ARFCN", "MCC", "MNC", "LAC", "CID", "dBm", "frames"]).style(
+    let header = Row::new(["ARFCN", "NETWORK", "MCC", "MNC", "LAC", "CID", "dBm", "frames"]).style(
         Style::default()
             .fg(Color::DarkGray)
             .add_modifier(Modifier::BOLD),
@@ -451,8 +460,10 @@ fn cells(f: &mut Frame, snap: &Snapshot, area: Rect) {
         .cells
         .iter()
         .map(|c| {
+            let net = crate::e212::short(&c.cell.mcc, &c.cell.mnc);
             Row::new([
                 c.arfcn.to_string(),
+                if net.is_empty() { "—".into() } else { net },
                 c.cell.mcc.clone(),
                 c.cell.mnc.clone(),
                 c.cell.lac.to_string(),
@@ -464,6 +475,7 @@ fn cells(f: &mut Frame, snap: &Snapshot, area: Rect) {
         .collect();
     let widths = [
         Constraint::Length(7),
+        Constraint::Length(22),
         Constraint::Length(5),
         Constraint::Length(5),
         Constraint::Length(8),

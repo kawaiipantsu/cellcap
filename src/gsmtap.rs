@@ -64,6 +64,38 @@ pub fn rr_message(packet: &[u8]) -> Option<(u8, &[u8])> {
     (l3.len() >= 3 && l3[1] & 0x0F == 0x06).then(|| (l3[2], &l3[3..]))
 }
 
+/// The layer 3 protocol discriminator and message-type octet of a signalling
+/// message on a dedicated channel (SDCCH, SACCH, FACCH): past the GSMTAP header,
+/// an optional SACCH L1 header, and the LAPDm address/control/length octets.
+/// Best-effort — for the live "what is it doing" view; Wireshark is authoritative.
+/// Returns `None` for broadcast/common channels, fill frames and anything short.
+pub fn l3_dedicated(packet: &[u8]) -> Option<(u8, u8)> {
+    let h = header(packet)?;
+    let base = h.channel & 0x7F;
+    let is_sacch = h.channel & 0x80 != 0;
+    // Only channels that carry LAPDm-framed L3 signalling.
+    if !matches!(base, 0x06..=0x0A) {
+        return None;
+    }
+    let body = &packet[h.len..];
+    // SACCH prepends a 2-octet L1 header (power/timing) before LAPDm.
+    let off = if is_sacch { 2 } else { 0 };
+    // LAPDm: address, control, length; then the L3 payload.
+    if body.len() < off + 3 {
+        return None;
+    }
+    let length = (body[off + 2] >> 2) as usize; // EL/M bits dropped
+    let l3 = &body[off + 3..];
+    if length < 2 || l3.len() < 2 {
+        return None; // fill frame or too short
+    }
+    let pd = l3[0] & 0x0F;
+    // RR uses the whole message-type octet; MM/CC/SS/SMS keep the low 6 bits
+    // (the top bits are the send-sequence / skip indicator).
+    let mt = if pd == 0x06 { l3[1] } else { l3[1] & 0x3F };
+    Some((pd, mt))
+}
+
 pub fn kind(packet: &[u8]) -> Kind {
     match rr_message(packet) {
         Some((t @ (0x00..=0x07 | 0x18..=0x1F), _)) => Kind::SystemInfo(t),
@@ -220,6 +252,20 @@ pub mod tests {
         ];
         p.extend_from_slice(l3);
         p
+    }
+
+    #[test]
+    fn reads_dedicated_l3() {
+        // SDCCH/8 (0x08), LAPDm UI frame carrying MM Location Updating Request
+        // (PD 0x05, type 0x08). LAPDm: addr, control=UI, length=(2<<2)|EL.
+        let lapdm = [0x01u8, 0x03, (2 << 2) | 0x01, 0x05, 0x08];
+        let p = frame(0x08, &lapdm);
+        assert_eq!(l3_dedicated(&p), Some((0x05, 0x08)));
+        // A broadcast/common channel is never read as dedicated L3.
+        assert_eq!(l3_dedicated(&frame(CHANNEL_CCCH, &[0x00, 0x06, 0x21])), None);
+        // SACCH (0x80 bit) skips the 2-octet L1 header before LAPDm.
+        let sacch = [0xAAu8, 0xBB, 0x01, 0x03, (2 << 2) | 0x01, 0x06, 0x35];
+        assert_eq!(l3_dedicated(&frame(0x88, &sacch)), Some((0x06, 0x35)));
     }
 
     /// System Information Type 3 for MCC 238, MNC 01, LAC 0x01AF, CID 0x067C.

@@ -24,8 +24,16 @@ pub enum Tone {
     Assignment,
     /// A temporary identity was paged.
     Paging,
-    /// A permanent identity (IMSI/IMEI) in the clear — worth noticing.
+    /// A permanent identity (IMSI/IMEI) in the clear, or a reject — worth noticing.
     Alert,
+    /// Mobility / connection-management signalling (Location Updating, CM service…).
+    Signalling,
+    /// Security exchange (authentication, ciphering, identity).
+    Security,
+    /// Short message service.
+    Sms,
+    /// Call control (setup, alerting, connect, release).
+    Call,
 }
 
 impl Tone {
@@ -36,8 +44,73 @@ impl Tone {
             Tone::Assignment => "\x1b[97m",
             Tone::Paging => "\x1b[93m",
             Tone::Alert => "\x1b[91m",
+            Tone::Signalling => "\x1b[94m",
+            Tone::Security => "\x1b[95m",
+            Tone::Sms => "\x1b[92m",
+            Tone::Call => "\x1b[36m",
         }
     }
+}
+
+/// Map a dedicated-channel L3 message (protocol discriminator + message type) to
+/// a readable event and its tone. Best-effort, for the live view. Returns a
+/// generic label for a recognised protocol with an unmapped type.
+fn dtap_event(pd: u8, mt: u8) -> Option<(&'static str, Tone)> {
+    use Tone::*;
+    Some(match (pd, mt) {
+        // Mobility management (TS 24.008 §10.4)
+        (0x05, 0x08) => ("Location Updating Request", Signalling),
+        (0x05, 0x02) => ("Location Updating Accept", Signalling),
+        (0x05, 0x04) => ("Location Updating Reject", Alert),
+        (0x05, 0x01) => ("IMSI Detach Indication", Signalling),
+        (0x05, 0x12) => ("Authentication Request", Security),
+        (0x05, 0x14) => ("Authentication Response", Security),
+        (0x05, 0x1C) => ("Authentication Reject", Alert),
+        (0x05, 0x18) => ("Identity Request", Security),
+        (0x05, 0x19) => ("Identity Response", Security),
+        (0x05, 0x1A) => ("TMSI Reallocation Command", Signalling),
+        (0x05, 0x1B) => ("TMSI Reallocation Complete", Signalling),
+        (0x05, 0x24) => ("CM Service Request", Signalling),
+        (0x05, 0x21) => ("CM Service Accept", Signalling),
+        (0x05, 0x22) => ("CM Service Reject", Alert),
+        (0x05, 0x32) => ("MM Information (name / time)", Signalling),
+        (0x05, _) => ("Mobility Management", Signalling),
+        // Radio resource (TS 44.018)
+        (0x06, 0x35) => ("Ciphering Mode Command", Security),
+        (0x06, 0x32) => ("Ciphering Mode Complete", Security),
+        (0x06, 0x2E) => ("Assignment Command", Assignment),
+        (0x06, 0x29) => ("Assignment Complete", Assignment),
+        (0x06, 0x2F) => ("Assignment Failure", Alert),
+        (0x06, 0x2B) => ("Handover Command", Assignment),
+        (0x06, 0x0D) => ("Channel Release", Signalling),
+        (0x06, 0x3A) => ("Channel Mode Modify", Signalling),
+        (0x06, 0x15) => ("Measurement Report", Signalling),
+        (0x06, 0x16) => ("Classmark Change", Signalling),
+        (0x06, 0x13) => ("Classmark Enquiry", Signalling),
+        (0x06, _) => ("Radio Resource", Signalling),
+        // Call control (TS 24.008 §10.4)
+        (0x03, 0x05) => ("Call Setup", Call),
+        (0x03, 0x02) => ("Call Proceeding", Call),
+        (0x03, 0x01) => ("Alerting (ringing)", Call),
+        (0x03, 0x07) => ("Connect (answered)", Call),
+        (0x03, 0x0F) => ("Connect Acknowledge", Call),
+        (0x03, 0x25) => ("Disconnect", Call),
+        (0x03, 0x2D) => ("Release", Call),
+        (0x03, 0x2A) => ("Release Complete", Call),
+        (0x03, 0x3E) => ("Emergency Call Setup", Alert),
+        (0x03, _) => ("Call Control", Call),
+        // Short messages (CP layer)
+        (0x09, 0x01) => ("SMS (CP-DATA)", Sms),
+        (0x09, 0x04) => ("SMS (CP-ACK)", Sms),
+        (0x09, 0x10) => ("SMS (CP-ERROR)", Sms),
+        (0x09, _) => ("Short Message", Sms),
+        // Supplementary services
+        (0x0B, _) => ("Supplementary Service", Signalling),
+        // GPRS mobility / session management
+        (0x08, _) => ("GPRS Mobility Management", Signalling),
+        (0x0A, _) => ("GPRS Session Management", Signalling),
+        _ => return None,
+    })
 }
 
 /// What a System Information message is for, in a few words.
@@ -63,6 +136,17 @@ pub struct Line {
     pub detail: String,
 }
 
+/// A readable PLMN: "TDC A/S · Denmark · 238/01", or just "238/01" when the
+/// operator and country are unknown. Always keeps the raw codes for verification.
+pub fn pretty_plmn(mcc: &str, mnc: &str) -> String {
+    let name = crate::e212::describe(mcc, mnc);
+    if name.is_empty() {
+        format!("{mcc}/{mnc}")
+    } else {
+        format!("{name} · {mcc}/{mnc}")
+    }
+}
+
 /// Describe a frame, or `None` for one that is counted but not shown
 /// (dedicated-channel frames and paging fillers).
 pub fn describe(frame: &[u8]) -> Option<Line> {
@@ -70,9 +154,9 @@ pub fn describe(frame: &[u8]) -> Option<Line> {
         Kind::SystemInfo(t) => {
             let mut detail = purpose(t).to_string();
             if let Some(c) = gsmtap::cell(frame) {
-                detail = format!("MCC {} MNC {} LAC {} CID {}", c.mcc, c.mnc, c.lac, c.cid);
+                detail = format!("{} · LAC {} CID {}", pretty_plmn(&c.mcc, &c.mnc), c.lac, c.cid);
             } else if let Some((mcc, mnc, lac)) = gsmtap::location_area(frame) {
-                detail = format!("MCC {mcc} MNC {mnc} LAC {lac}");
+                detail = format!("{} · LAC {lac}", pretty_plmn(&mcc, &mnc));
             }
             Some(Line {
                 label: format!("System Information {}", gsmtap::system_info_name(t)),
@@ -112,7 +196,16 @@ pub fn describe(frame: &[u8]) -> Option<Line> {
                 None => String::new(),
             },
         }),
-        Kind::Other => None,
+        Kind::Other => {
+            // Signalling on a dedicated channel (SDCCH/SACCH/FACCH): show the event.
+            let (pd, mt) = gsmtap::l3_dedicated(frame)?;
+            let (label, tone) = dtap_event(pd, mt)?;
+            Some(Line {
+                label: label.to_string(),
+                tone,
+                detail: String::new(),
+            })
+        }
     }
 }
 
@@ -193,10 +286,11 @@ impl Live {
         }
         let time = chrono::Local::now().format("%H:%M:%S%.3f").to_string();
         println!(
-            "{}  {}  {}  {}  {}",
+            "{}  {}  {}  {}  {}  {}",
             self.paint(DIM, &time),
             self.paint(DIM, &format!("ARFCN {:<4}", header.arfcn)),
             self.paint(DIM, &format!("{:>4} dBm", header.signal_dbm)),
+            self.paint(DIM, &format!("{:<9}", crate::inspect::channel_name(header.channel))),
             self.paint(line.tone.ansi(), &format!("{:<26}", line.label)),
             line.detail
         );
@@ -228,7 +322,8 @@ mod tests {
     fn describes_messages() {
         let l = describe(&si3()).unwrap();
         assert_eq!(l.label, "System Information 3");
-        assert_eq!(l.detail, "MCC 238 MNC 01 LAC 431 CID 1660");
+        // PLMN name comes from the E.212 table via pretty_plmn — not duplicated here.
+        assert_eq!(l.detail, format!("{} · LAC 431 CID 1660", pretty_plmn("238", "01")));
         let l = describe(&frame(2, &[0x31, 0x06, 0x1A, 0x00])).unwrap();
         assert_eq!(
             (l.label.as_str(), l.detail.as_str()),

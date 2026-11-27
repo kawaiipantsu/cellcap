@@ -118,13 +118,15 @@ cellcap scan --device uhd                        # uses grgsm_scanner
 ```
 
 ```
-ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    BROADCAST
-11     937.2 MHz      3.2   238  01   431    1660   yes
-94     953.8 MHz    -10.1   -    -    -      -      no
+ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    NETWORK
+11     937.2 MHz      3.2   238  01   431    1660   TDC A/S
+94     953.8 MHz    -10.1   -    -    -      -      (not GSM)
 ```
 
-`BROADCAST no` means the channel carries power but no decodable broadcast channel — a traffic
-carrier, or something that is not GSM.
+The **NETWORK** column is resolved from the broadcast MCC/MNC through an E.212 lookup (operator,
+else country); `(not GSM)` means the channel carries power but no decodable broadcast channel.
+The name is data, not logic — it lives in one table (`src/e212.rs`) and the raw codes are always
+shown too, so a rebrand or MNC reassignment is a one-line edit.
 
 ### Capture GSM — `cellcap run`
 
@@ -142,17 +144,30 @@ cellcap run --arfcn 11 --interactive --no-write
 ```
 
 **Dashboard (`-i`)** — tabs: *Overview* (channel, phase, counters, cells, dir size), *Live*
-(one line per message), *Cells* (ARFCN, MCC/MNC/LAC/CID, signal, frames), *Captures* (files on
-disk), *Log*. Move with `Tab`/`←`/`→` or `1`–`5`, quit with `q`. Subscriber identities are named
-by **kind only** (TMSI/IMSI), never by value.
+(the rolling decoded feed), *Cells* (ARFCN, **operator**, MCC/MNC/LAC/CID, signal, frames),
+*Captures* (files on disk), *Log*. Move with `Tab`/`←`/`→` or `1`–`5`, quit with `q`. Subscriber
+identities are named by **kind only** (TMSI/IMSI), never by value.
 
-**Line view (`--stream`)** — one readable line per message, for logs or headless terminals:
+The *Live* feed shows the time, **channel** (BCCH/CCCH/SDCCH/SACCH…), signal, the **decoded event**
+(colour-coded), and its detail — so you can watch activity and confirm it matches Wireshark:
+
+<p align="center"><img src="docs/img/ui-live.png" alt="live decoded feed" width="860"></p>
+
+**Line view (`--stream`)** — one readable line per message, for logs or headless terminals.
+Each line shows the time, channel, signal, the **decoded event**, and its detail; the operator is
+named from the MCC/MNC and dedicated-channel signalling is parsed into events (Location Updating,
+Authentication, Ciphering, SMS, call setup, …):
 
 ```
-14:43:35.378  ARFCN 11   -27 dBm  System Information 3     MCC 238 MNC 01 LAC 431 CID 1660
-14:43:36.103  ARFCN 11   -27 dBm  Immediate Assignment     a phone is sent to SDCCH/8 on TS 3
-14:43:36.367  ARFCN 11   -27 dBm  Paging                   1 phone(s) called, by TMSI
+14:43:35.378  ARFCN 11  -27 dBm  BCCH     System Information 3     TDC A/S · Denmark · 238/01 · LAC 431 CID 1660
+14:43:36.103  ARFCN 11  -27 dBm  CCCH     Immediate Assignment     a phone is sent to SDCCH/8 on timeslot 3
+14:43:36.367  ARFCN 11  -27 dBm  CCCH     Paging                   1 phone(s) called, by TMSI
+14:43:37.002  ARFCN 11  -26 dBm  SDCCH/8  Authentication Request
+14:43:37.511  ARFCN 11  -26 dBm  SDCCH/8  Ciphering Mode Command
 ```
+
+What's parsed here is only to **confirm the flow matches Wireshark** — the pcap/UDP stream is still
+the thing you analyse. Events are best-effort; Wireshark is authoritative.
 
 Main options: `--freq`/`--arfcn` (channel; without either, cellcap scans), `--band`, `--cells`,
 `--plmn`, `--dwell`, `--device` (`rtl=0`/`hackrf=0`/`uhd`), `--gain`, `--ppm`, `--output-dir`,
@@ -186,9 +201,9 @@ cellcap sends the **raw GSMTAP datagrams**; set up the receiving Wireshark one o
 - **Direct on port 4729.** Capture on the normal network interface and filter `udp.port == 4729`;
   Wireshark auto-dissects GSMTAP on its registered port. Then `--gsmtap-udp <host>:4729`.
 
-`--gsmtap-udp` respects `--drop-paging` (dropped frames are not mirrored). Remember the frames
-cross the network in the clear — only mirror to a host and network you control, and see the
-**Disclaimer**.
+`--gsmtap-udp` works alongside `-i` (watch the local dashboard while mirroring) or `--stream`,
+and respects `--drop-paging` (dropped frames are not mirrored). Remember the frames cross the
+network in the clear — only mirror to a host and network you control, and see the **Disclaimer**.
 
 ### Capture LTE — `cellcap lte`
 

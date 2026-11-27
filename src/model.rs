@@ -83,6 +83,8 @@ pub struct FeedLine {
     pub time: String,
     pub arfcn: u16,
     pub dbm: i8,
+    /// GSMTAP channel the frame came on (for the channel column).
+    pub chan: u8,
     pub tone: Tone,
     pub label: String,
     pub detail: String,
@@ -215,6 +217,7 @@ impl Model {
             time: Self::now(),
             arfcn: header.arfcn,
             dbm: header.signal_dbm,
+            chan: header.channel,
             tone: line.tone,
             label: line.label,
             detail: line.detail,

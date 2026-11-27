@@ -2,6 +2,20 @@
 
 All notable changes to cellcap. Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.1.0] — 2026-11-27
+
+### Added
+- **Operator / country names** — MCC/MNC are resolved through an E.212 lookup (`src/e212.rs`) and
+  shown as e.g. `TDC A/S · Denmark · 238/01` in the live feed, the scan table's NETWORK column, and
+  the dashboard's Cells tab. The raw codes are always kept; the name is data in one table, not logic
+  (ARFCN is never assumed to belong to an operator — the operator comes from the broadcast MNC).
+- **Decoded events in the live view** — dedicated-channel signalling (SDCCH/SACCH/FACCH) is parsed
+  into readable, colour-coded events: Location Updating, Authentication, Ciphering Mode, Identity,
+  CM Service, SMS (CP), call control (Setup/Alerting/Connect/Release), and more. Best-effort, to
+  confirm the flow matches Wireshark; Wireshark stays authoritative.
+- **Channel column** — every live line (stream and dashboard) shows the GSMTAP channel
+  (BCCH/CCCH/SDCCH/SACCH…).
+
 ## [1.0.0] — 2026-11-27
 
 cellcap grew from a GSM-only pcap writer into a multi-RAT capture suite with an interactive

@@ -210,17 +210,23 @@ fn scan_with_scanner(radio: &Radio, bands: &[Band]) -> Result<Vec<Found>> {
 
 /// The scan result as a table for the terminal.
 pub fn table(found: &[Found]) -> String {
-    let mut out = String::from("ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    BROADCAST\n");
+    let mut out =
+        String::from("ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    NETWORK\n");
     for f in found {
         let c = &f.candidate;
-        let (mcc, mnc, lac, cid) = match &f.cell {
-            Some(cell) => (
-                cell.mcc.clone(),
-                cell.mnc.clone(),
-                cell.lac.to_string(),
-                cell.cid.to_string(),
-            ),
-            None => ("-".into(), "-".into(), "-".into(), "-".into()),
+        let (mcc, mnc, lac, cid, net) = match &f.cell {
+            Some(cell) => {
+                let net = crate::e212::short(&cell.mcc, &cell.mnc);
+                (
+                    cell.mcc.clone(),
+                    cell.mnc.clone(),
+                    cell.lac.to_string(),
+                    cell.cid.to_string(),
+                    if net.is_empty() { "—".into() } else { net },
+                )
+            }
+            None if f.frames > 0 => ("-".into(), "-".into(), "-".into(), "-".into(), "(no identity)".into()),
+            None => ("-".into(), "-".into(), "-".into(), "-".into(), "(not GSM)".into()),
         };
         out.push_str(&format!(
             "{:<6} {:<12} {:>5.1}   {:<4} {:<4} {:<6} {:<6} {}\n",
@@ -231,7 +237,7 @@ pub fn table(found: &[Found]) -> String {
             mnc,
             lac,
             cid,
-            if f.frames > 0 { "yes" } else { "no" }
+            net
         ));
     }
     out
@@ -300,7 +306,13 @@ mod tests {
         ];
         let t = table(&found);
         assert!(t.contains("11     937.2 MHz"));
-        assert!(t.lines().nth(1).unwrap().ends_with("yes"));
-        assert!(t.lines().nth(2).unwrap().ends_with("no"));
+        // The network column is whatever the E.212 table resolves 238/01 to —
+        // derived here, not duplicated, so the operator name lives only in e212.
+        assert!(t
+            .lines()
+            .nth(1)
+            .unwrap()
+            .ends_with(&crate::e212::short("238", "01")));
+        assert!(t.lines().nth(2).unwrap().ends_with("(not GSM)"));
     }
 }

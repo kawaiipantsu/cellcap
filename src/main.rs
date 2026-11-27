@@ -9,6 +9,7 @@ mod capture;
 mod check;
 mod decode;
 mod disclaimer;
+mod e212;
 mod freq;
 mod gsmtap;
 mod inspect;
