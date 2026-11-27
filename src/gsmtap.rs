@@ -68,8 +68,10 @@ pub fn rr_message(packet: &[u8]) -> Option<(u8, &[u8])> {
 /// message on a dedicated channel (SDCCH, SACCH, FACCH): past the GSMTAP header,
 /// an optional SACCH L1 header, and the LAPDm address/control/length octets.
 /// Best-effort — for the live "what is it doing" view; Wireshark is authoritative.
-/// Returns `None` for broadcast/common channels, fill frames and anything short.
-pub fn l3_dedicated(packet: &[u8]) -> Option<(u8, u8)> {
+/// Returns the protocol discriminator, the message type, and the L3 bytes
+/// (from the PD octet). `None` for broadcast/common channels, fill frames and
+/// anything short.
+pub fn l3_dedicated(packet: &[u8]) -> Option<(u8, u8, &[u8])> {
     let h = header(packet)?;
     let base = h.channel & 0x7F;
     let is_sacch = h.channel & 0x80 != 0;
@@ -93,7 +95,7 @@ pub fn l3_dedicated(packet: &[u8]) -> Option<(u8, u8)> {
     // RR uses the whole message-type octet; MM/CC/SS/SMS keep the low 6 bits
     // (the top bits are the send-sequence / skip indicator).
     let mt = if pd == 0x06 { l3[1] } else { l3[1] & 0x3F };
-    Some((pd, mt))
+    Some((pd, mt, l3))
 }
 
 pub fn kind(packet: &[u8]) -> Kind {
@@ -130,17 +132,22 @@ pub fn system_info_name(message_type: u8) -> String {
 /// The kinds of subscriber identity a paging request addresses, e.g.
 /// `["TMSI", "IMSI"]`. Empty for a filler request that pages nobody. The
 /// identities themselves are not returned.
-pub fn paged(packet: &[u8]) -> Vec<&'static str> {
-    let Some((t, body)) = rr_message(packet) else {
-        return Vec::new();
-    };
-    let name = |first: u8| match first & 0x07 {
+/// The kind of a mobile identity from its first octet (TS 24.008 §10.5.1.4).
+pub fn identity_name(first: u8) -> Option<&'static str> {
+    match first & 0x07 {
         1 => Some("IMSI"),
         2 => Some("IMEI"),
         3 => Some("IMEISV"),
         4 => Some("TMSI"),
         _ => None,
+    }
+}
+
+pub fn paged(packet: &[u8]) -> Vec<&'static str> {
+    let Some((t, body)) = rr_message(packet) else {
+        return Vec::new();
     };
+    let name = identity_name;
     let mut out = Vec::new();
     match t {
         // Type 1: one or two mobile identities, each with its own type.
@@ -260,12 +267,12 @@ pub mod tests {
         // (PD 0x05, type 0x08). LAPDm: addr, control=UI, length=(2<<2)|EL.
         let lapdm = [0x01u8, 0x03, (2 << 2) | 0x01, 0x05, 0x08];
         let p = frame(0x08, &lapdm);
-        assert_eq!(l3_dedicated(&p), Some((0x05, 0x08)));
+        assert_eq!(l3_dedicated(&p).map(|(pd, mt, _)| (pd, mt)), Some((0x05, 0x08)));
         // A broadcast/common channel is never read as dedicated L3.
-        assert_eq!(l3_dedicated(&frame(CHANNEL_CCCH, &[0x00, 0x06, 0x21])), None);
+        assert!(l3_dedicated(&frame(CHANNEL_CCCH, &[0x00, 0x06, 0x21])).is_none());
         // SACCH (0x80 bit) skips the 2-octet L1 header before LAPDm.
         let sacch = [0xAAu8, 0xBB, 0x01, 0x03, (2 << 2) | 0x01, 0x06, 0x35];
-        assert_eq!(l3_dedicated(&frame(0x88, &sacch)), Some((0x06, 0x35)));
+        assert_eq!(l3_dedicated(&frame(0x88, &sacch)).map(|(pd, mt, _)| (pd, mt)), Some((0x06, 0x35)));
     }
 
     /// System Information Type 3 for MCC 238, MNC 01, LAC 0x01AF, CID 0x067C.

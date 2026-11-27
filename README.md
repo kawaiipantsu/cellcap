@@ -162,12 +162,15 @@ Authentication, Ciphering, SMS, call setup, …):
 14:43:35.378  ARFCN 11  -27 dBm  BCCH     System Information 3     TDC A/S · Denmark · 238/01 · LAC 431 CID 1660
 14:43:36.103  ARFCN 11  -27 dBm  CCCH     Immediate Assignment     a phone is sent to SDCCH/8 on timeslot 3
 14:43:36.367  ARFCN 11  -27 dBm  CCCH     Paging                   1 phone(s) called, by TMSI
-14:43:37.002  ARFCN 11  -26 dBm  SDCCH/8  Authentication Request
-14:43:37.511  ARFCN 11  -26 dBm  SDCCH/8  Ciphering Mode Command
+14:43:37.002  ARFCN 11  -26 dBm  SDCCH/8  Identity Request         asks for IMSI
+14:43:37.511  ARFCN 11  -26 dBm  SDCCH/8  Authentication Request   128-bit RAND challenge
+14:43:37.998  ARFCN 11  -26 dBm  SDCCH/8  Ciphering Mode Command   start A5/1
 ```
 
-What's parsed here is only to **confirm the flow matches Wireshark** — the pcap/UDP stream is still
-the thing you analyse. Events are best-effort; Wireshark is authoritative.
+Paging names the identity kind per phone (`by TMSI + IMSI` — an IMSI in the clear is flagged),
+and several events name what they carry (the identity an *Identity Request* asks for, the A5
+algorithm a *Ciphering Mode Command* starts, …). This is only to **confirm the flow matches
+Wireshark** — the pcap/UDP stream is still what you analyse, and Wireshark is authoritative.
 
 Main options: `--freq`/`--arfcn` (channel; without either, cellcap scans), `--band`, `--cells`,
 `--plmn`, `--dwell`, `--device` (`rtl=0`/`hackrf=0`/`uhd`), `--gain`, `--ppm`, `--output-dir`,

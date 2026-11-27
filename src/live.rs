@@ -147,6 +147,36 @@ pub fn pretty_plmn(mcc: &str, mnc: &str) -> String {
     }
 }
 
+/// What kind of data a dedicated-channel message carries, in a few words, for
+/// the detail column. Best-effort and byte-guarded; empty when there is nothing
+/// cheap and useful to add. `l3` starts at the protocol-discriminator octet.
+fn dtap_detail(pd: u8, mt: u8, l3: &[u8]) -> String {
+    match (pd, mt) {
+        // Identity Request: the network asks for a specific identity — showing
+        // IMSI/IMEI here is a classic IMSI-catcher tell.
+        (0x05, 0x18) => match l3.get(2).copied().and_then(gsmtap::identity_name) {
+            Some(id) => format!("asks for {id}"),
+            None => String::new(),
+        },
+        // TMSI Reallocation / Location Updating Accept: a new identity is assigned.
+        (0x05, 0x1A) => match l3.get(8).copied().and_then(gsmtap::identity_name) {
+            Some(id) => format!("assigns {id}"),
+            None => "assigns a new identity".into(),
+        },
+        (0x05, 0x12) => "128-bit RAND challenge".into(),
+        (0x05, 0x32) => "network name / time".into(),
+        // Ciphering Mode Command: octet 3 bit 0 = start/stop, bits 1-3 = A5 algo.
+        (0x06, 0x35) => match l3.get(2) {
+            Some(o) if o & 0x01 == 0 => "no ciphering".into(),
+            Some(o) => format!("start A5/{}", ((o >> 1) & 0x07) + 1),
+            None => String::new(),
+        },
+        (0x03, 0x05) => "incoming call".into(),
+        (0x09, 0x01) => "message delivery".into(),
+        _ => String::new(),
+    }
+}
+
 /// Describe a frame, or `None` for one that is counted but not shown
 /// (dedicated-channel frames and paging fillers).
 pub fn describe(frame: &[u8]) -> Option<Line> {
@@ -197,13 +227,14 @@ pub fn describe(frame: &[u8]) -> Option<Line> {
             },
         }),
         Kind::Other => {
-            // Signalling on a dedicated channel (SDCCH/SACCH/FACCH): show the event.
-            let (pd, mt) = gsmtap::l3_dedicated(frame)?;
+            // Signalling on a dedicated channel (SDCCH/SACCH/FACCH): show the event
+            // and, where cheap to read, what kind of data it carries.
+            let (pd, mt, l3) = gsmtap::l3_dedicated(frame)?;
             let (label, tone) = dtap_event(pd, mt)?;
             Some(Line {
                 label: label.to_string(),
                 tone,
-                detail: String::new(),
+                detail: dtap_detail(pd, mt, l3),
             })
         }
     }
@@ -369,5 +400,19 @@ mod tests {
         // Going back to content already shown stays quiet.
         live.frame(&h, &p);
         assert_eq!(live.hidden, 2);
+    }
+
+    #[test]
+    fn dedicated_events_name_the_data() {
+        // Identity Request asking for the IMSI (l3[2] type = 1).
+        assert_eq!(dtap_detail(0x05, 0x18, &[0x05, 0x18, 0x01]), "asks for IMSI");
+        // Ciphering Mode Command: SC=1 (start), algo bits = 0 -> A5/1.
+        assert_eq!(dtap_detail(0x06, 0x35, &[0x06, 0x35, 0x01]), "start A5/1");
+        // SC=0 -> no ciphering.
+        assert_eq!(dtap_detail(0x06, 0x35, &[0x06, 0x35, 0x00]), "no ciphering");
+        // Authentication Request always carries a RAND.
+        assert_eq!(dtap_detail(0x05, 0x12, &[0x05, 0x12]), "128-bit RAND challenge");
+        // A message with nothing extra to say.
+        assert_eq!(dtap_detail(0x06, 0x0D, &[0x06, 0x0D]), "");
     }
 }
