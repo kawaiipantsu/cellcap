@@ -31,6 +31,7 @@ cellcap starts and stops. cellcap is everything around it.
 | `cellcap check` | Preflight checklist: required tools and an SDR, with ✓/✗ per item. |
 | `cellcap scan` | Find cells and print a table. |
 | `cellcap run` | Capture broadcast/control channels to pcapng (the service runs this). |
+| `cellcap lte` | Capture the LTE (4G) downlink to a Wireshark MAC-LTE pcap (drives LTESniffer). |
 | `cellcap decode` | Decode a dedicated/ciphered channel (SDCCH, TCH) from a recording. |
 | `cellcap inspect FILE…` | Summarise a capture file, like `tshark -z`. |
 | `cellcap extract-kc [DEVICE]` | Read the SIM's session key Kc from a serial modem. |
@@ -293,21 +294,48 @@ country. Check what applies to you before running this continuously.
 
 ## Beyond GSM (LTE / 3G / 5G)
 
-cellcap decodes **GSM (2G)**, because that is what gr-gsm does. The other radio
-technologies need different tools, and are honestly out of reach for a passive, low-cost
-setup to varying degrees:
+cellcap's own decoder is **GSM (2G)**, because that is what gr-gsm does. For the other radio
+technologies it orchestrates dedicated tools — the same pattern as driving gr-gsm — where that
+is realistic, and is honest about where passive capture simply isn't:
 
-- **LTE (4G):** the broadcast/control plane *can* be looked at passively — tools like
-  srsRAN's cell search, **LTESniffer** and **FALCON** recover the MIB/SIB and PDCCH/DCI, and
-  some export to pcap for Wireshark (which has full LTE RRC/NAS dissectors). This is the most
-  realistic next RAT. cellcap could orchestrate such a tool the same way it drives gr-gsm,
-  but that is a separate project, not built here.
-- **UMTS (3G):** passive decoding is largely infeasible with cheap SDRs (CDMA, closed).
-- **5G NR:** passive decoding is research-grade and not practical today.
+- **LTE (4G): supported via `cellcap lte`.** It drives **LTESniffer** (built on FALCON +
+  srsRAN) to demodulate the downlink control plane (PDCCH/DCI, and PDSCH where unciphered)
+  and write a **MAC-LTE pcap** that Wireshark reads directly. Downlink-only on a single
+  B210-class SDR; uplink needs two time-synced SDRs and is out of scope. See
+  [LTE capture](#lte-capture-cellcap-lte) below.
+- **UMTS (3G):** **not supported — no passive path.** There is no open-source passive WCDMA
+  downlink sniffer, and the LTE tools don't transfer (WCDMA is a different, CDMA air
+  interface). Building one would mean writing a WCDMA decoder from scratch. With a B210 you
+  can survey and record 3G spectrum, but not decode the control plane. cellcap does not
+  pretend otherwise.
+- **5G NR:** **research-grade, file-first.** [5GSniffer](https://github.com/spritelab/5GSniffer)
+  (Sprite Lab) is a 5G PDCCH blind decoder (DCI / active RNTIs) built on srsRAN; it works best
+  from a recorded I/Q file, and live B210 capture is limited to narrow FDD carriers (~10 MHz).
+  Not wired into cellcap — run it directly against a recording. A build is staged under
+  `/srv/sdr-tools/5GSniffer`.
 
-So for a mixed network, cellcap covers the 2G side end-to-end; use dedicated LTE tooling for
-4G and treat 3G/5G as spectrum-survey only. A B210-class SDR is a good base for all of this
-because its bandwidth and tuning range suit LTE capture too.
+So for a mixed network: cellcap covers 2G end-to-end and 4G downlink via `cellcap lte`; 5G is
+a research-grade side path on recorded I/Q; 3G is survey-only. A B210-class SDR is the right
+base for all of this — its bandwidth and tuning range suit LTE and NR capture.
+
+### LTE capture (`cellcap lte`)
+
+```
+# Scan for the cell, then capture its downlink (cell search finds PCI/PRB):
+cellcap lte --earfcn 1575          # band 3, 1842.5 MHz — or --freq 1842.5M
+cellcap lte --freq 806M            # band 20
+
+# Lock to a known cell (skip the search):
+cellcap lte --freq 806M --cell-id 379 --prb 100
+```
+
+It writes `lte_dl_<time>.pcapng.pcap` into the capture directory; open it in Wireshark and
+filter on `mac-lte`. `--earfcn` understands the common FDD bands (1–66); otherwise give
+`--freq`. The B210 has two RX, so `--antennas 2` (the default) decodes 2×2 MIMO (TM3/4);
+`--antennas 1` is single-stream (TM1). LTESniffer needs the SDR and real-time priority, so
+run it as root (`sudo cellcap lte …`). Build LTESniffer with
+`/srv/sdr-tools/build-ltesniffer.sh` (see the readiness notes in that directory); `cellcap
+check` reports whether it and the B210 FPGA image are present.
 
 ## Limits
 

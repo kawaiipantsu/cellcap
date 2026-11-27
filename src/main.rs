@@ -12,6 +12,7 @@ mod freq;
 mod gsmtap;
 mod inspect;
 mod live;
+mod lte;
 mod model;
 mod pcapng;
 mod radio;
@@ -19,7 +20,7 @@ mod scan;
 mod simaudit;
 mod tui;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
 use std::io::IsTerminal;
 use std::net::UdpSocket;
@@ -100,6 +101,43 @@ enum Command {
         /// Serial baud rate
         #[arg(long, default_value_t = 115200, value_name = "BAUD")]
         baud: u32,
+    },
+    /// Capture the LTE (4G) downlink into a Wireshark MAC-LTE pcap (drives LTESniffer)
+    Lte {
+        /// Downlink centre frequency, e.g. 1842.5M
+        #[arg(long = "freq", value_name = "FREQUENCY", value_parser = freq::parse_hz)]
+        freq: Option<u64>,
+        /// Downlink EARFCN instead of --freq (common FDD bands 1-66)
+        #[arg(long, value_name = "EARFCN")]
+        earfcn: Option<u32>,
+        /// RX antennas: 1 (TM1) or 2 (2x2 MIMO). The B210 has two.
+        #[arg(long, default_value_t = 2, value_name = "N")]
+        antennas: u8,
+        /// Decoder worker threads
+        #[arg(long, default_value_t = 4, value_name = "N")]
+        threads: u8,
+        /// Fixed RX gain in dB (default: device AGC)
+        #[arg(long, value_name = "DB")]
+        gain: Option<f32>,
+        /// UHD device arguments for LTESniffer's -a (the B210 needs the larger buffer)
+        #[arg(
+            long = "rf-args",
+            default_value = "num_recv_frames=512",
+            value_name = "ARGS"
+        )]
+        rf_args: String,
+        /// Lock to this physical cell id instead of searching (needs --prb)
+        #[arg(long = "cell-id", value_name = "PCI")]
+        cell_id: Option<u16>,
+        /// Cell bandwidth in resource blocks for a fixed cell: 6/15/25/50/75/100
+        #[arg(long, value_name = "PRB")]
+        prb: Option<u16>,
+        /// Directory for the capture
+        #[arg(long, default_value = "/var/lib/cellcap/captures", value_name = "DIR")]
+        output_dir: PathBuf,
+        /// Show LTESniffer's own output
+        #[arg(long)]
+        verbose: bool,
     },
     /// Decode a dedicated or ciphered channel (SDCCH, TCH) into a pcapng
     Decode {
@@ -362,6 +400,44 @@ fn main() -> Result<()> {
             }
         }
         Command::AuditSim { device, baud } => simaudit::run(&device, baud)?,
+        Command::Lte {
+            freq,
+            earfcn,
+            antennas,
+            threads,
+            gain,
+            rf_args,
+            cell_id,
+            prb,
+            output_dir,
+            verbose,
+        } => {
+            let freq_hz = match (freq, earfcn) {
+                (Some(f), _) => f,
+                (None, Some(e)) => lte::earfcn_to_hz(e).ok_or_else(|| {
+                    anyhow!("EARFCN {e} is not in the FDD bands cellcap knows; pass --freq instead")
+                })?,
+                (None, None) => {
+                    bail!("give --freq (e.g. 1842.5M) or --earfcn for the LTE downlink")
+                }
+            };
+            if cell_id.is_some() != prb.is_some() {
+                bail!("--cell-id and --prb go together: a fixed cell needs both, or give neither to search");
+            }
+            let job = lte::Job {
+                freq_hz,
+                antennas,
+                threads,
+                gain,
+                rf_args,
+                cell_search: cell_id.is_none(),
+                cell_id,
+                prb,
+                output_dir,
+                verbose,
+            };
+            lte::run(&job)?;
+        }
         Command::Decode {
             radio,
             freq,

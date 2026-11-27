@@ -185,13 +185,54 @@ pub fn run() -> Result<()> {
             "hackrf tools not installed",
         ),
     }
+    // UHD / USRP (B210 and clones). UHD init is slow, so allow more time.
+    match probe("uhd_find_devices", &[], 8) {
+        Some((out, _)) if out.contains("Device Address") || out.contains("serial:") => {
+            any_sdr = true;
+            let name = out
+                .lines()
+                .find(|l| l.contains("product") || l.contains("type"))
+                .map(str::trim)
+                .unwrap_or("present");
+            r.line(State::Ok, "UHD/USRP (uhd)", name);
+        }
+        Some(_) => r.line(State::Optional, "UHD/USRP (uhd)", "no UHD device detected"),
+        None => r.line(
+            State::Optional,
+            "UHD/USRP (uhd_find_devices)",
+            "UHD not installed (apt install uhd-host)",
+        ),
+    }
     if !any_sdr {
         r.required_missing += 1;
         r.line(
             State::Missing,
             "an SDR",
-            "no RTL-SDR or HackRF was detected",
+            "no RTL-SDR, HackRF or UHD device was detected",
         );
+    }
+
+    r.heading("Optional: LTE (4G) capture (lte)");
+    match crate::lte::find_sniffer() {
+        Ok(p) => r.line(State::Ok, crate::lte::SNIFFER, &p.display().to_string()),
+        Err(_) => r.line(
+            State::Optional,
+            crate::lte::SNIFFER,
+            "not built — run /srv/sdr-tools/build-ltesniffer.sh (needs a B210-class SDR to run)",
+        ),
+    }
+    // The B210 FPGA image UHD loads on connect.
+    let b210_img = ["/usr/share/uhd/4.8.0/images", "/usr/share/uhd/images"]
+        .iter()
+        .map(|d| std::path::Path::new(d).join("usrp_b210_fpga.bin"))
+        .find(|p| p.is_file());
+    match b210_img {
+        Some(p) => r.line(State::Ok, "B210 FPGA image", &p.display().to_string()),
+        None => r.line(
+            State::Optional,
+            "B210 FPGA image",
+            "run `uhd_images_downloader` (or use the clone vendor's usrp_b210_fpga.bin)",
+        ),
     }
 
     println!();
