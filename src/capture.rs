@@ -194,7 +194,9 @@ pub fn run(
         Some(addr) => {
             let s = UdpSocket::bind(("0.0.0.0", 0))?;
             s.connect(addr)?;
-            rep.info(&format!("mirroring GSMTAP to {addr} (open it in Wireshark)"));
+            rep.info(&format!(
+                "mirroring GSMTAP to {addr} — in Wireshark use port 4729 (auto), or udpdump with Payload type = gsmtap"
+            ));
             Some(s)
         }
         None => None,

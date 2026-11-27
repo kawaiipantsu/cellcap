@@ -176,8 +176,13 @@ cellcap run --arfcn 11 --gsmtap-udp 172.22.22.20:4729
 cellcap sends the **raw GSMTAP datagrams**; set up the receiving Wireshark one of two ways:
 
 - **udpdump listener (port 5555).** On the Wireshark host, start the **`udpdump`** capture
-  interface (Capture → Options → *udpdump*) and set its **Payload type to `gsmtap`** (the default
-  is `data`, which would show the frames undissected). Then `--gsmtap-udp <host>:5555`.
+  interface (Capture → Options → *udpdump* → the **⚙ gear**) and set its **Payload type to
+  `gsmtap`**, then `--gsmtap-udp <host>:5555`.
+
+  > **This is the one thing everyone trips on.** udpdump defaults its payload type to `data` and
+  > stamps that name into the exported-PDU `DISSECTOR_NAME` tag, so Wireshark shows the frames
+  > **undissected** until you change it to `gsmtap`. There is no pass-through mode — the payload
+  > type is the only lever. (`tshark -i udpdump -o extcap.udpdump.payload:gsmtap`.)
 - **Direct on port 4729.** Capture on the normal network interface and filter `udp.port == 4729`;
   Wireshark auto-dissects GSMTAP on its registered port. Then `--gsmtap-udp <host>:4729`.
 
