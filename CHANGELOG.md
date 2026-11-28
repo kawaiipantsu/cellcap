@@ -2,11 +2,11 @@
 
 All notable changes to cellcap. Versions follow [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.3.0] — 2026-11-28
 
 ### Added
 - **`cellcap audit-cell` — rogue/IMSI-catcher scoring for one cell.** Camps on a cell
-  (`--arfcn`/`--freq`, `--seconds`, default 120) and scores it across five areas — identity
+  (`--arfcn`/`--freq`, `--seconds`, default 180) and scores it across five areas — identity
   exposure, encryption, authentication, network identity/neighbours, registration behaviour —
   printing a colour ✓/✗/⚠ checklist and a 0–100 confidence verdict (LIKELY LEGITIMATE →
   LIKELY ROGUE / IMSI CATCHER). Detects forced IMSI/IMEI identification, A5/0 (no ciphering),
