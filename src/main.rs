@@ -5,6 +5,7 @@
 //! frames are written as pcapng.
 
 mod atmodem;
+mod audit;
 mod capture;
 mod check;
 mod decode;
@@ -12,6 +13,7 @@ mod disclaimer;
 mod e212;
 mod freq;
 mod gsmtap;
+mod history;
 mod inspect;
 mod live;
 mod lte;
@@ -44,6 +46,21 @@ pub fn request_stop() {
     if let Some(s) = STOP.get() {
         s.store(true, Ordering::Relaxed);
     }
+}
+
+static RESCAN: AtomicBool = AtomicBool::new(false);
+
+/// Ask the capture loop to run a fresh scan, as the TUI does on the rescan key.
+/// In auto mode (no explicit channels) this re-sweeps the bands and picks the
+/// strongest cells again, so cells that were missing from the first sweep can be
+/// picked up without restarting.
+pub fn request_rescan() {
+    RESCAN.store(true, Ordering::Relaxed);
+}
+
+/// Take the pending rescan request, clearing it.
+pub fn take_rescan() -> bool {
+    RESCAN.swap(false, Ordering::Relaxed)
 }
 
 /// The start-up banner with its colour codes removed, for the TUI.
@@ -111,6 +128,35 @@ enum Command {
         /// Serial baud rate
         #[arg(long, default_value_t = 115200, value_name = "BAUD")]
         baud: u32,
+    },
+    /// Camp on one cell, then score it legit vs rogue/catcher (a ✓/✗ checklist)
+    AuditCell {
+        #[command(flatten)]
+        radio: RadioArgs,
+        #[command(flatten)]
+        scan: ScanArgs,
+        /// Channel number to audit, e.g. 1016
+        #[arg(long = "arfcn", value_name = "ARFCN")]
+        arfcn: Option<u16>,
+        /// Downlink frequency instead of --arfcn, e.g. 933.4M
+        #[arg(long = "freq", value_name = "FREQUENCY", value_parser = freq::parse_hz)]
+        freq: Option<u64>,
+        /// Seconds to collect signalling before scoring
+        #[arg(long, default_value_t = 120, value_name = "SECONDS")]
+        seconds: u64,
+        /// Skip the neighbourhood pre-scan (faster, but no LAC/signal/history checks)
+        #[arg(long = "no-scan")]
+        no_scan: bool,
+        /// File that remembers cells across audits, to flag new ones (empty to disable)
+        #[arg(
+            long,
+            default_value = "/var/lib/cellcap/cell-history.tsv",
+            value_name = "FILE"
+        )]
+        history: PathBuf,
+        /// Also save the collected frames to a pcapng here (evidence / offline analysis)
+        #[arg(long, value_name = "DIR")]
+        output_dir: Option<PathBuf>,
     },
     /// Capture the LTE (4G) downlink into a Wireshark MAC-LTE pcap (drives LTESniffer)
     Lte {
@@ -388,7 +434,14 @@ fn main() -> Result<()> {
         Command::Scan { radio, scan } => {
             let r = radio.radio();
             let s = socket(r.port)?;
-            let found = scan::scan(&r, &s, &scan.bands, scan.top, scan.probe_seconds)?;
+            let found = scan::scan(
+                &r,
+                &s,
+                &scan.bands,
+                scan.top,
+                scan.probe_seconds,
+                &mut |_| {},
+            )?;
             if found.is_empty() {
                 bail!("nothing found: no channel stands out in the scanned band(s)");
             }
@@ -436,6 +489,35 @@ fn main() -> Result<()> {
             }
         }
         Command::AuditSim { device, baud } => simaudit::run(&device, baud)?,
+        Command::AuditCell {
+            radio,
+            scan,
+            arfcn,
+            freq,
+            seconds,
+            no_scan,
+            history,
+            output_dir,
+        } => {
+            let hz = match (freq, arfcn) {
+                (Some(f), _) => f,
+                (None, Some(a)) => freq::arfcn_to_hz(a)
+                    .with_context(|| format!("ARFCN {a} is not in a known band"))?,
+                (None, None) => bail!("audit-cell needs the cell: give --arfcn or --freq"),
+            };
+            let r = radio.radio();
+            let s = socket(r.port)?;
+            let opts = audit::Opts {
+                seconds,
+                bands: scan.bands,
+                scan_top: scan.top,
+                probe_seconds: scan.probe_seconds,
+                scan: !no_scan,
+                history: (!history.as_os_str().is_empty()).then_some(history),
+                output_dir,
+            };
+            audit::run(&r, &s, hz, &opts)?;
+        }
         Command::Lte {
             freq,
             earfcn,

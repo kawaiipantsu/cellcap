@@ -248,6 +248,36 @@ pub fn cell(packet: &[u8]) -> Option<Cell> {
     })
 }
 
+/// Selected access/timer parameters from a System Information Type 3 frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Si3Params {
+    /// CELL_BAR_ACCESS: phones may not select/camp on a barred cell.
+    pub cell_barred: bool,
+    /// ATT: the cell demands the IMSI attach/detach procedure.
+    pub att: bool,
+    /// T3212 periodic location-updating period in minutes (0 = disabled).
+    pub t3212_minutes: u16,
+}
+
+/// Parse the byte-aligned access parameters of an SI3 (TS 44.018 §9.1.35):
+/// ATT and T3212 from the Control Channel Description, and CELL_BAR_ACCESS from
+/// the RACH Control Parameters. The CSN.1 rest octets (cell-reselect offset,
+/// penalty time) are bit-packed and not parsed here.
+pub fn si3_params(packet: &[u8]) -> Option<Si3Params> {
+    let (0x1B, body) = rr_message(packet)? else {
+        return None;
+    };
+    // body: Cell Identity(2), LAI(5), Control Channel Description(3) at [7..10],
+    // Cell Options(1), Cell Selection(2), RACH Control Parameters(3) at [13..16].
+    let ccd = body.get(7..10)?;
+    let rach1 = *body.get(13)?;
+    Some(Si3Params {
+        cell_barred: rach1 & 0x02 != 0,
+        att: ccd[0] & 0x40 != 0,
+        t3212_minutes: (ccd[2] as u16) * 6,
+    })
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -267,12 +297,18 @@ pub mod tests {
         // (PD 0x05, type 0x08). LAPDm: addr, control=UI, length=(2<<2)|EL.
         let lapdm = [0x01u8, 0x03, (2 << 2) | 0x01, 0x05, 0x08];
         let p = frame(0x08, &lapdm);
-        assert_eq!(l3_dedicated(&p).map(|(pd, mt, _)| (pd, mt)), Some((0x05, 0x08)));
+        assert_eq!(
+            l3_dedicated(&p).map(|(pd, mt, _)| (pd, mt)),
+            Some((0x05, 0x08))
+        );
         // A broadcast/common channel is never read as dedicated L3.
         assert!(l3_dedicated(&frame(CHANNEL_CCCH, &[0x00, 0x06, 0x21])).is_none());
         // SACCH (0x80 bit) skips the 2-octet L1 header before LAPDm.
         let sacch = [0xAAu8, 0xBB, 0x01, 0x03, (2 << 2) | 0x01, 0x06, 0x35];
-        assert_eq!(l3_dedicated(&frame(0x88, &sacch)).map(|(pd, mt, _)| (pd, mt)), Some((0x06, 0x35)));
+        assert_eq!(
+            l3_dedicated(&frame(0x88, &sacch)).map(|(pd, mt, _)| (pd, mt)),
+            Some((0x06, 0x35))
+        );
     }
 
     /// System Information Type 3 for MCC 238, MNC 01, LAC 0x01AF, CID 0x067C.
@@ -283,6 +319,29 @@ pub mod tests {
                 0x49, 0x06, 0x1B, 0x06, 0x7C, 0x32, 0xF8, 0x10, 0x01, 0xAF, 0x00,
             ],
         )
+    }
+
+    /// A full System Information Type 3, captured from a real cell (238/66,
+    /// LAC 22034, CID 35605) and cross-checked with tshark: ATT set, T3212 = 50
+    /// (×6 min = 300 min), CELL_BAR_ACCESS = 0 (not barred).
+    pub fn si3_full() -> Vec<u8> {
+        frame(
+            CHANNEL_BCCH,
+            &[
+                0x49, 0x06, 0x1B, 0x8B, 0x15, 0x32, 0xF8, 0x66, 0x56, 0x12, 0xD0, 0x01, 0x32, 0x54,
+                0x65, 0x46, 0xB0, 0x00, 0x00, 0x81, 0x1F, 0x40, 0x0B,
+            ],
+        )
+    }
+
+    #[test]
+    fn si3_access_params_match_tshark() {
+        let p = si3_params(&si3_full()).expect("SI3 should parse");
+        assert!(!p.cell_barred); // CELL_BAR_ACCESS = 0
+        assert!(p.att); // ATT = 1
+        assert_eq!(p.t3212_minutes, 300); // T3212 = 50 decihours = 300 min
+                                          // Not an SI3 → None.
+        assert!(si3_params(&frame(CHANNEL_CCCH, &[0x15, 0x06, 0x21, 0x00])).is_none());
     }
 
     #[test]

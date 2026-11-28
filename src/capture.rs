@@ -95,6 +95,22 @@ impl Reporter {
         }
     }
 
+    /// A scan has just probed a channel. In the TUI this fills the Cells tab
+    /// while the scan runs, so the operator sees cells appearing rather than a
+    /// blank screen; the headless and stream views already print scan lines.
+    fn scanned(&mut self, f: &scan::Found) {
+        if let Reporter::Tui(m) = self {
+            if let Some(cell) = &f.cell {
+                m.note_scan_cell(
+                    f.candidate.arfcn,
+                    cell.clone(),
+                    f.candidate.power_db,
+                    f.frames as u64,
+                );
+            }
+        }
+    }
+
     fn frame(&mut self, header: &gsmtap::Header, frame: &[u8]) {
         match self {
             Reporter::Headless => {}
@@ -137,7 +153,14 @@ fn pick(radio: &Radio, socket: &UdpSocket, rep: &mut Reporter, o: &Options) -> R
     let mut wait = Duration::from_secs(30);
     loop {
         rep.phase(Phase::Scanning);
-        let found = scan::scan(radio, socket, &o.bands, o.scan_top, o.probe_seconds)?;
+        let found = scan::scan(
+            radio,
+            socket,
+            &o.bands,
+            o.scan_top,
+            o.probe_seconds,
+            &mut |f| rep.scanned(f),
+        )?;
         if crate::stopping() {
             return Ok(Vec::new());
         }
@@ -225,6 +248,9 @@ pub fn run(
             if crate::stopping() {
                 break "stopping";
             }
+            if crate::take_rescan() {
+                break "rescan";
+            }
             if targets.len() > 1 && started.elapsed() >= o.dwell {
                 break "dwell";
             }
@@ -293,7 +319,14 @@ pub fn run(
             w.flush()?;
         }
         rep.totals(stats.written, stats.dropped);
-        if outcome == "failed" {
+        if outcome == "rescan" {
+            // Operator asked for a fresh sweep: drop the current rotation so the
+            // top of the loop scans and picks cells again (see `pick`).
+            rep.info("rescan requested; sweeping the bands for cells again");
+            targets.clear();
+            next = 0;
+            failures = 0;
+        } else if outcome == "failed" {
             failures = if heard { 1 } else { failures + 1 };
             if auto && failures >= 3 {
                 rep.warn("the chosen channel(s) stopped working; scanning again");

@@ -147,6 +147,25 @@ pub fn pretty_plmn(mcc: &str, mnc: &str) -> String {
     }
 }
 
+/// Describe a Location Area Identification (3 BCD PLMN octets + 2 LAC octets)
+/// found in a mobility message. A handset with no stored location sends the
+/// "no valid LAI" wildcard — all-F MCC/MNC and LAC 0xFFFE (3GPP TS 24.008
+/// §10.5.1.3) — which is not a real operator; name that case plainly instead of
+/// showing an undecodable code. `prefix` is prepended to a real LAI only.
+fn pretty_lai(lai: &[u8], prefix: &str) -> String {
+    let Some(b) = lai.get(..5) else {
+        return String::new();
+    };
+    let lac = u16::from_be_bytes([b[3], b[4]]);
+    // plmn() already returns None for the all-F wildcard (0xF is not a digit).
+    match gsmtap::plmn(&b[0..3]) {
+        Some((mcc, mnc)) if lac != 0xFFFE => {
+            format!("{prefix}{} LAC {lac}", pretty_plmn(&mcc, &mnc))
+        }
+        _ => "no valid LAI (initial attach)".into(),
+    }
+}
+
 /// What kind of data a dedicated-channel message carries, in a few words, for
 /// the detail column. Best-effort and byte-guarded; empty when there is nothing
 /// cheap and useful to add. `l3` starts at the protocol-discriminator octet.
@@ -165,8 +184,18 @@ fn dtap_detail(pd: u8, mt: u8, l3: &[u8]) -> String {
         },
         (0x05, 0x12) => "128-bit RAND challenge".into(),
         (0x05, 0x32) => "network name / time".into(),
+        // Location Updating Request: the LAI the phone is coming from. A null
+        // LAI (all-F MCC/MNC, LAC 0xFFFE) means it has no stored location — an
+        // initial attach, and the case where the IMSI is often sent in the clear.
+        (0x05, 0x08) => l3
+            .get(3..8)
+            .map(|lai| pretty_lai(lai, "from "))
+            .unwrap_or_default(),
         // Location Updating Accept: the LAI the subscriber is now registered to.
-        (0x05, 0x02) => match l3.get(2..7).and_then(|b| gsmtap::plmn(&b[0..3]).map(|p| (p, b))) {
+        (0x05, 0x02) => match l3
+            .get(2..7)
+            .and_then(|b| gsmtap::plmn(&b[0..3]).map(|p| (p, b)))
+        {
             Some(((mcc, mnc), b)) => {
                 let lac = u16::from_be_bytes([b[3], b[4]]);
                 format!("accepted on {} LAC {lac}", pretty_plmn(&mcc, &mnc))
@@ -235,7 +264,12 @@ pub fn describe(frame: &[u8]) -> Option<Line> {
         Kind::SystemInfo(t) => {
             let mut detail = purpose(t).to_string();
             if let Some(c) = gsmtap::cell(frame) {
-                detail = format!("{} · LAC {} CID {}", pretty_plmn(&c.mcc, &c.mnc), c.lac, c.cid);
+                detail = format!(
+                    "{} · LAC {} CID {}",
+                    pretty_plmn(&c.mcc, &c.mnc),
+                    c.lac,
+                    c.cid
+                );
             } else if let Some((mcc, mnc, lac)) = gsmtap::location_area(frame) {
                 detail = format!("{} · LAC {lac}", pretty_plmn(&mcc, &mnc));
             }
@@ -372,7 +406,10 @@ impl Live {
             self.paint(DIM, &time),
             self.paint(DIM, &format!("ARFCN {:<4}", header.arfcn)),
             self.paint(DIM, &format!("{:>4} dBm", header.signal_dbm)),
-            self.paint(DIM, &format!("{:<9}", crate::inspect::channel_name(header.channel))),
+            self.paint(
+                DIM,
+                &format!("{:<9}", crate::inspect::channel_name(header.channel))
+            ),
             self.paint(line.tone.ansi(), &format!("{:<26}", line.label)),
             line.detail
         );
@@ -405,7 +442,10 @@ mod tests {
         let l = describe(&si3()).unwrap();
         assert_eq!(l.label, "System Information 3");
         // PLMN name comes from the E.212 table via pretty_plmn — not duplicated here.
-        assert_eq!(l.detail, format!("{} · LAC 431 CID 1660", pretty_plmn("238", "01")));
+        assert_eq!(
+            l.detail,
+            format!("{} · LAC 431 CID 1660", pretty_plmn("238", "01"))
+        );
         let l = describe(&frame(2, &[0x31, 0x06, 0x1A, 0x00])).unwrap();
         assert_eq!(
             (l.label.as_str(), l.detail.as_str()),
@@ -456,15 +496,24 @@ mod tests {
     #[test]
     fn dedicated_events_name_the_data() {
         // Identity Request asking for the IMSI (l3[2] type = 1).
-        assert_eq!(dtap_detail(0x05, 0x18, &[0x05, 0x18, 0x01]), "asks for IMSI");
+        assert_eq!(
+            dtap_detail(0x05, 0x18, &[0x05, 0x18, 0x01]),
+            "asks for IMSI"
+        );
         // Ciphering Mode Command: SC=1 (start), algo bits = 0 -> A5/1.
         assert_eq!(dtap_detail(0x06, 0x35, &[0x06, 0x35, 0x01]), "start A5/1");
         // SC=0 -> no ciphering.
         assert_eq!(dtap_detail(0x06, 0x35, &[0x06, 0x35, 0x00]), "no ciphering");
         // Authentication Request always carries a RAND.
-        assert_eq!(dtap_detail(0x05, 0x12, &[0x05, 0x12]), "128-bit RAND challenge");
+        assert_eq!(
+            dtap_detail(0x05, 0x12, &[0x05, 0x12]),
+            "128-bit RAND challenge"
+        );
         // Location Updating Reject with cause "IMSI unknown in HLR" (2).
-        assert_eq!(dtap_detail(0x05, 0x04, &[0x05, 0x04, 0x02]), "IMSI unknown in HLR");
+        assert_eq!(
+            dtap_detail(0x05, 0x04, &[0x05, 0x04, 0x02]),
+            "IMSI unknown in HLR"
+        );
         // Channel Release, normal.
         assert_eq!(dtap_detail(0x06, 0x0D, &[0x06, 0x0D, 0x00]), "normal");
         // Location Updating Accept names the LAI (PLMN 238/01, LAC 431).
@@ -472,6 +521,19 @@ mod tests {
         assert_eq!(
             dtap_detail(0x05, 0x02, &accept),
             format!("accepted on {} LAC 431", pretty_plmn("238", "01"))
+        );
+        // Location Updating Request with the "no valid LAI" wildcard: all-F
+        // MCC/MNC and LAC 0xFFFE — an initial attach, not a real network.
+        let null_lur = [0x05, 0x08, 0x70, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE];
+        assert_eq!(
+            dtap_detail(0x05, 0x08, &null_lur),
+            "no valid LAI (initial attach)"
+        );
+        // Location Updating Request coming from a real LAI (238/20, LAC 431).
+        let lur = [0x05, 0x08, 0x70, 0x32, 0xF8, 0x02, 0x01, 0xAF];
+        assert_eq!(
+            dtap_detail(0x05, 0x08, &lur),
+            format!("from {} LAC 431", pretty_plmn("238", "20"))
         );
     }
 }

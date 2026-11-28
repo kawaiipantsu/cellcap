@@ -6,7 +6,7 @@
 //! asks the capture loop to stop, it does not touch the radio directly.
 
 use crate::model::{FeedLine, Level, Model, Phase, Snapshot};
-use crate::{banner_plain, request_stop, stopping};
+use crate::{banner_plain, request_rescan, request_stop, stopping};
 use anyhow::Result;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -173,15 +173,17 @@ fn capture_files(dir: &str) -> (Vec<FileRow>, u64) {
 pub fn run(model: Arc<Model>, finished: Arc<AtomicBool>) -> Result<()> {
     let mut terminal = ratatui::init();
     let mut tab = 0usize;
+    let mut tick = 0usize;
     let result = (|| -> Result<()> {
         loop {
             let snap = model.snapshot();
-            terminal.draw(|f| draw(f, &snap, tab))?;
+            terminal.draw(|f| draw(f, &snap, tab, tick))?;
+            tick = tick.wrapping_add(1);
 
             if finished.load(Ordering::Relaxed) || stopping() {
                 break;
             }
-            if event::poll(Duration::from_millis(250))? {
+            if event::poll(Duration::from_millis(125))? {
                 if let Event::Key(k) = event::read()? {
                     if k.kind != KeyEventKind::Press {
                         continue;
@@ -199,6 +201,7 @@ pub fn run(model: Arc<Model>, finished: Arc<AtomicBool>) -> Result<()> {
                         KeyCode::Char(c @ '1'..='5') => {
                             tab = (c as usize - '1' as usize).min(TABS.len() - 1)
                         }
+                        KeyCode::Char('r') => request_rescan(),
                         _ => {}
                     }
                 }
@@ -212,7 +215,22 @@ pub fn run(model: Arc<Model>, finished: Arc<AtomicBool>) -> Result<()> {
     result
 }
 
-fn draw(f: &mut Frame, snap: &Snapshot, tab: usize) {
+/// Braille spinner frames, advanced once per draw to show the loop is live.
+const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// A human description of what the capture loop is doing, for the status bar.
+fn status_text(phase: Phase, channel: &str) -> String {
+    match phase {
+        Phase::Starting => "Initialising".into(),
+        Phase::Scanning => "Scanning for cells".into(),
+        Phase::Capturing if channel.is_empty() => "Monitoring".into(),
+        Phase::Capturing => format!("Monitoring {channel}"),
+        Phase::Stalled => "Stalled — restarting decoder".into(),
+        Phase::Stopping => "Stopping".into(),
+    }
+}
+
+fn draw(f: &mut Frame, snap: &Snapshot, tab: usize, tick: usize) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -265,19 +283,37 @@ fn draw(f: &mut Frame, snap: &Snapshot, tab: usize) {
         _ => log(f, snap, rows[2]),
     }
 
-    status_bar(f, snap, rows[3]);
+    status_bar(f, snap, rows[3], tick);
     let keys = Line::from(vec![Span::styled(
-        "  [Tab/←→] switch tab   [1-5] jump   [q] quit",
+        "  [Tab/←→] switch tab   [1-5] jump   [r] rescan   [q] quit",
         Style::default().fg(Color::DarkGray),
     )]);
     f.render_widget(Paragraph::new(keys), rows[4]);
 }
 
-fn status_bar(f: &mut Frame, snap: &Snapshot, area: Rect) {
+fn status_bar(f: &mut Frame, snap: &Snapshot, area: Rect, tick: usize) {
     let c = &snap.counts;
     let out = snap.output.clone().unwrap_or_else(|| "not writing".into());
+    // A still glyph once stopping, an animated braille spinner while working.
+    let spin = if snap.phase == Phase::Stopping {
+        "·"
+    } else {
+        SPINNER[tick % SPINNER.len()]
+    };
     let text = Line::from(vec![
-        Span::styled("  device ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("  {spin} "),
+            Style::default()
+                .fg(phase_colour(snap.phase))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            status_text(snap.phase, &snap.channel),
+            Style::default()
+                .fg(phase_colour(snap.phase))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("   device ", Style::default().fg(Color::DarkGray)),
         Span::raw(snap.device.clone()),
         Span::styled("   up ", Style::default().fg(Color::DarkGray)),
         Span::raw(human_dur(snap.uptime)),
@@ -451,7 +487,10 @@ fn live(f: &mut Frame, snap: &Snapshot, area: Rect) {
 }
 
 fn cells(f: &mut Frame, snap: &Snapshot, area: Rect) {
-    let header = Row::new(["ARFCN", "NETWORK", "MCC", "MNC", "LAC", "CID", "dBm", "frames"]).style(
+    let header = Row::new([
+        "ARFCN", "NETWORK", "MCC", "MNC", "LAC", "CID", "dBm", "frames",
+    ])
+    .style(
         Style::default()
             .fg(Color::DarkGray)
             .add_modifier(Modifier::BOLD),
@@ -560,4 +599,36 @@ fn log(f: &mut Frame, snap: &Snapshot, area: Rect) {
         })
         .collect();
     f.render_widget(Paragraph::new(lines), inner);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_text_describes_each_phase() {
+        assert_eq!(status_text(Phase::Starting, ""), "Initialising");
+        assert_eq!(status_text(Phase::Scanning, ""), "Scanning for cells");
+        assert_eq!(status_text(Phase::Stopping, ""), "Stopping");
+        assert_eq!(
+            status_text(Phase::Stalled, ""),
+            "Stalled — restarting decoder"
+        );
+        // Capturing names the channel it is monitoring when there is one.
+        assert_eq!(status_text(Phase::Capturing, ""), "Monitoring");
+        assert_eq!(
+            status_text(Phase::Capturing, "937.2 MHz (ARFCN 11)"),
+            "Monitoring 937.2 MHz (ARFCN 11)"
+        );
+    }
+
+    #[test]
+    fn spinner_cycles_through_all_frames() {
+        // Every tick maps to a frame, and it wraps without panicking.
+        let frames: std::collections::HashSet<&str> = (0..SPINNER.len())
+            .map(|t| SPINNER[t % SPINNER.len()])
+            .collect();
+        assert_eq!(frames.len(), SPINNER.len());
+        assert_eq!(SPINNER[0], SPINNER[SPINNER.len() % SPINNER.len()]);
+    }
 }

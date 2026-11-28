@@ -228,6 +228,27 @@ impl Model {
         }
     }
 
+    /// Record a cell identified during a scan probe, so the Cells tab fills in
+    /// while scanning instead of staying blank. The signal here is the sweep
+    /// power; it is refined to the real GSMTAP level once capture starts and
+    /// frames for the cell arrive through [`Model::frame`].
+    pub fn note_scan_cell(&self, arfcn: u16, cell: Cell, power_db: f64, frames: u64) {
+        let mut g = self.lock();
+        let key = (arfcn, cell.lac, cell.cid);
+        g.cells
+            .entry(key)
+            .and_modify(|c| {
+                c.signal_dbm = power_db.round() as i8;
+                c.frames = c.frames.max(frames);
+            })
+            .or_insert(CellStat {
+                arfcn,
+                cell,
+                signal_dbm: power_db.round() as i8,
+                frames,
+            });
+    }
+
     pub fn set_written(&self, written: u64, dropped: u64) {
         let mut g = self.lock();
         g.counts.written = written;
@@ -273,6 +294,32 @@ mod tests {
         assert_eq!(s.cells.len(), 1);
         assert_eq!(s.cells[0].frames, 2);
         assert_eq!(s.cells[0].cell.mcc, "238");
+    }
+
+    #[test]
+    fn scan_fills_the_cells_tab_before_capture() {
+        let m = Model::new("hackrf=0".into(), None);
+        let cell = Cell {
+            mcc: "238".into(),
+            mnc: "01".into(),
+            lac: 431,
+            cid: 1660,
+        };
+        m.note_scan_cell(11, cell, -66.4, 3);
+        let s = m.snapshot();
+        assert_eq!(s.cells.len(), 1);
+        assert_eq!(s.cells[0].arfcn, 11);
+        assert_eq!(s.cells[0].signal_dbm, -66); // sweep power, rounded
+        assert_eq!(s.cells[0].frames, 3);
+        // A second probe of the same cell updates rather than duplicates it.
+        let same = Cell {
+            mcc: "238".into(),
+            mnc: "01".into(),
+            lac: 431,
+            cid: 1660,
+        };
+        m.note_scan_cell(11, same, -60.0, 1);
+        assert_eq!(m.snapshot().cells.len(), 1);
     }
 
     #[test]

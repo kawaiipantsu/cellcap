@@ -66,6 +66,7 @@ The GSM demodulation is done by [gr-gsm](https://github.com/ptrkrysik/gr-gsm) an
 | `cellcap extract-kc [DEVICE]` | Read the SIM's session key Kc from a serial modem. |
 | `cellcap sim-info [DEVICE]` | Read IMSI, Kc, GPRS Kc and TMSI/LAI from the SIM. |
 | `cellcap audit-sim [DEVICE]` | Report the SIM's toolkit/OTA attack surface (Simjacker/WIB class). |
+| `cellcap audit-cell --arfcn N` | Camp on a cell, then score it legit vs rogue/IMSI-catcher (a ✓/✗ checklist). |
 | `cellcap disclaimer` | Print the legal/ethical disclaimer (also `cellcap --disclaimer`). |
 
 ## Quickstart
@@ -149,7 +150,11 @@ cellcap run --arfcn 11 --interactive --no-write
 
 **Dashboard (`-i`)** — tabs: *Overview* (channel, phase, counters, cells, dir size), *Live*
 (the rolling decoded feed), *Cells* (ARFCN, **operator**, MCC/MNC/LAC/CID, signal, frames),
-*Captures* (files on disk), *Log*. Move with `Tab`/`←`/`→` or `1`–`5`, quit with `q`. Subscriber
+*Captures* (files on disk), *Log*. Move with `Tab`/`←`/`→` or `1`–`5`, press `r` to re-scan for
+cells (picks up ones a first sweep missed), quit with `q`. The footer shows a live status —
+a braille spinner plus what it is doing (*Initialising*, *Scanning for cells*, *Monitoring
+937.2 MHz (ARFCN 11)*, …) — and the *Cells* tab fills in as the scan identifies each cell, so
+there is always something to watch while it sweeps. Subscriber
 identities are named by **kind only** (TMSI/IMSI), never by value.
 
 The *Live* feed shows the time, **channel** (BCCH/CCCH/SDCCH/SACCH…), signal, the **decoded event**
@@ -289,6 +294,37 @@ cellcap inspect cellcap-gsm-20261127T085130Z.pcapng
 
 Prints frame counts by message type and channel, the cells seen and the time span — a quick way
 to confirm a file holds what you want before opening Wireshark. No SDR needed.
+
+### Audit a cell — `cellcap audit-cell`
+
+```bash
+cellcap audit-cell --arfcn 1016 --device hackrf=0        # 120 s by default
+cellcap audit-cell --freq 933.4M --seconds 240
+```
+
+Camps on one cell, then scores whether it behaves like a legitimate cell or a rogue / IMSI-catcher
+/ sniffing / misconfigured one. It prints a ✓/✗/⚠ checklist across six areas — **identity
+exposure** (forced IMSI/IMEI identification, clear IMSIs), **encryption** (A5/0 downgrade, cipher
+strength), **authentication** (are subscribers challenged), **network identity & neighbours**
+(allocated PLMN, hidden neighbour lists), **registration behaviour**, and **neighbourhood &
+history** — and a 0–100 confidence verdict. It also flags a **mislabelled or over-powered test
+cell** that lures live handsets from other networks (read from the IMSI home PLMN in each
+registration) and rejects them.
+
+By default it **pre-scans the band first** (`--no-scan` to skip) so it can compare the target
+against its neighbours: a **LAC** no sibling cell of the same operator shares (forces
+re-registration — a catcher tell), or a **signal** far stronger than the other cells (very, or
+artificially, close). It also reads SI3 **access parameters** — whether the cell is **Cell
+Barred** (a test/rogue cell phones must not use should be; an unbarred one lets live handsets camp)
+and the **T3212** periodic-updating timer (an abnormally short one forces frequent re-registration).
+It keeps a **history** of cells seen (`--history FILE`, default `/var/lib/cellcap/cell-history.tsv`)
+and flags a cell that **newly appears** in otherwise-static infrastructure. `--output-dir DIR` saves
+every collected frame to a pcapng, so the audit keeps the evidence automatically.
+
+The checks are heuristics on passively observed behaviour, not proof: a real cell can miss a check
+in a short window, and a sophisticated catcher can fake one. Keep the pcapng (`cellcap run
+--arfcn N --output-dir …`) and corroborate before reporting. Strongest single tells: **A5/0
+ciphering** and **forced IMSI identification** on a commercial network.
 
 ### UHD / USRP (and B210 clones)
 

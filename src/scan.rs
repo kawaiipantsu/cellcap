@@ -105,15 +105,18 @@ pub fn probe(
 /// Scan the bands for cells. Devices with a power-sweep tool (RTL-SDR, HackRF)
 /// use cellcap's own sweep-then-probe; others (UHD, SoapySDR) are scanned with
 /// grgsm_scanner, which does the whole job itself.
+/// `on_found` is called with each channel as soon as it has been probed, so a
+/// caller (the TUI) can show cells appearing while the scan is still running.
 pub fn scan(
     radio: &Radio,
     socket: &UdpSocket,
     bands: &[Band],
     top: usize,
     probe_seconds: u64,
+    on_found: &mut dyn FnMut(&Found),
 ) -> Result<Vec<Found>> {
     if !radio.can_sweep() {
-        return scan_with_scanner(radio, bands);
+        return scan_with_scanner(radio, bands, on_found);
     }
     let mut found = Vec::new();
     for band in bands {
@@ -158,11 +161,13 @@ pub fn scan(
                     None => "no broadcast channel (traffic carrier or not GSM)".into(),
                 }
             );
-            found.push(Found {
+            let fd = Found {
                 candidate: c,
                 frames,
                 cell,
-            });
+            };
+            on_found(&fd);
+            found.push(fd);
         }
     }
     // Identified cells first, then by power.
@@ -175,7 +180,11 @@ pub fn scan(
 }
 
 /// Scan with grgsm_scanner, for devices without a power-sweep tool.
-fn scan_with_scanner(radio: &Radio, bands: &[Band]) -> Result<Vec<Found>> {
+fn scan_with_scanner(
+    radio: &Radio,
+    bands: &[Band],
+    on_found: &mut dyn FnMut(&Found),
+) -> Result<Vec<Found>> {
     let mut found = Vec::new();
     for band in bands {
         if crate::stopping() {
@@ -188,7 +197,7 @@ fn scan_with_scanner(radio: &Radio, bands: &[Band]) -> Result<Vec<Found>> {
         let cells = radio.scan_cells(band.name, 2_000_000)?;
         eprintln!("info: {} cell(s) found in {}", cells.len(), band.name);
         for sc in cells {
-            found.push(Found {
+            let fd = Found {
                 candidate: Candidate {
                     arfcn: sc.arfcn,
                     hz: sc.freq_hz,
@@ -201,7 +210,9 @@ fn scan_with_scanner(radio: &Radio, bands: &[Band]) -> Result<Vec<Found>> {
                     lac: sc.lac,
                     cid: sc.cid,
                 }),
-            });
+            };
+            on_found(&fd);
+            found.push(fd);
         }
     }
     found.sort_by(|a, b| b.candidate.power_db.total_cmp(&a.candidate.power_db));
@@ -210,8 +221,7 @@ fn scan_with_scanner(radio: &Radio, bands: &[Band]) -> Result<Vec<Found>> {
 
 /// The scan result as a table for the terminal.
 pub fn table(found: &[Found]) -> String {
-    let mut out =
-        String::from("ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    NETWORK\n");
+    let mut out = String::from("ARFCN  FREQUENCY    POWER   MCC  MNC  LAC    CID    NETWORK\n");
     for f in found {
         let c = &f.candidate;
         let (mcc, mnc, lac, cid, net) = match &f.cell {
@@ -225,8 +235,20 @@ pub fn table(found: &[Found]) -> String {
                     if net.is_empty() { "—".into() } else { net },
                 )
             }
-            None if f.frames > 0 => ("-".into(), "-".into(), "-".into(), "-".into(), "(no identity)".into()),
-            None => ("-".into(), "-".into(), "-".into(), "-".into(), "(not GSM)".into()),
+            None if f.frames > 0 => (
+                "-".into(),
+                "-".into(),
+                "-".into(),
+                "-".into(),
+                "(no identity)".into(),
+            ),
+            None => (
+                "-".into(),
+                "-".into(),
+                "-".into(),
+                "-".into(),
+                "(not GSM)".into(),
+            ),
         };
         out.push_str(&format!(
             "{:<6} {:<12} {:>5.1}   {:<4} {:<4} {:<6} {:<6} {}\n",

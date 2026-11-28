@@ -2,6 +2,48 @@
 
 All notable changes to cellcap. Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+- **`cellcap audit-cell` — rogue/IMSI-catcher scoring for one cell.** Camps on a cell
+  (`--arfcn`/`--freq`, `--seconds`, default 120) and scores it across five areas — identity
+  exposure, encryption, authentication, network identity/neighbours, registration behaviour —
+  printing a colour ✓/✗/⚠ checklist and a 0–100 confidence verdict (LIKELY LEGITIMATE →
+  LIKELY ROGUE / IMSI CATCHER). Detects forced IMSI/IMEI identification, A5/0 (no ciphering),
+  missing authentication, clear IMSIs, hidden neighbour lists and unknown PLMNs. Also flags a
+  **mislabelled/over-powered test cell** that lures live handsets from other networks (decoded
+  from the IMSI home PLMN in each Location Updating Request) and rejects them. Heuristic, passive,
+  and self-describing about its limits. New module `src/audit.rs`.
+  - **Neighbourhood pre-scan** (default on; `--no-scan` to skip): sweeps the band first so the
+    audit can compare the target against its neighbours — **LAC consistency** (a cell whose LAC no
+    sibling of the same operator shares forces re-registration, a catcher tell) and a **signal
+    outlier** check (a cell far stronger than its neighbours is very/artificially close).
+  - **History baseline** (`--history FILE`, default `/var/lib/cellcap/cell-history.tsv`): remembers
+    cells across audits (new module `src/history.rs`), so a cell that **newly appears** in otherwise
+    static infrastructure — claiming an existing operator — is flagged. New module `src/history.rs`.
+  - `collect()` restarts the decoder on silence as well as exit, so a pre-scan that briefly held the
+    SDR cannot wedge the audit.
+  - **SI3 access parameters** (`gsmtap::si3_params`, validated against a real captured SI3 and
+    tshark): **Cell Barred** — a test/rogue cell that phones must not use should be barred; this is
+    the direct reason an unbarred test cell lures live handsets — and **T3212**, where an abnormally
+    short periodic-updating timer forces frequent re-registration (an identity-harvesting tell).
+  - **`--output-dir`** saves every collected frame to a pcapng, so an audit automatically keeps the
+    evidence and the raw bytes needed to validate or extend the SI parsing offline.
+- **Null-LAI label** — a Location Updating Request carrying the "no valid LAI" wildcard
+  (all-F MCC/MNC, LAC 0xFFFE) now reads `no valid LAI (initial attach)` in the live feed, and a
+  real LAI reads `from <operator> LAC <n>`, via a new `pretty_lai` helper.
+
+- **Rescan key in the live dashboard** — press `r` in the `run -i` dashboard to re-sweep the bands
+  and re-pick cells without restarting. The first sweep can miss weaker cells to RF variance; a
+  rescan lets the capture rotation catch up to the full set as conditions change.
+- **Live status in the dashboard footer** — an animated braille spinner plus a plain-language state
+  (*Initialising*, *Scanning for cells*, *Monitoring &lt;channel&gt;*, *Stalled — restarting*,
+  *Stopping*), colour-coded by phase, so the operator can see at a glance that it is working.
+- **Cells tab fills during scanning** — each cell the scan identifies now appears in the *Cells* tab
+  as soon as it is probed (via a new `on_found` callback through `scan::scan`), instead of the tab
+  staying blank until capture begins. The scan signal is the sweep power, refined to the real GSMTAP
+  level once capture starts.
+
 ## [1.2.0] — 2026-11-27
 
 ### Added
