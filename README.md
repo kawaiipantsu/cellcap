@@ -318,8 +318,16 @@ artificially, close). It also reads SI3 **access parameters** — whether the ce
 Barred** (a test/rogue cell phones must not use should be; an unbarred one lets live handsets camp)
 and the **T3212** periodic-updating timer (an abnormally short one forces frequent re-registration).
 It keeps a **history** of cells seen (`--history FILE`, default `/var/lib/cellcap/cell-history.tsv`)
-and flags a cell that **newly appears** in otherwise-static infrastructure. `--output-dir DIR` saves
-every collected frame to a pcapng, so the audit keeps the evidence automatically.
+and flags a cell that **newly appears** in otherwise-static infrastructure. It collects for 180 s by
+default and saves every frame to a pcapng (`--output-dir`, default `/var/lib/cellcap/audits`) so the
+evidence is kept automatically — so a full audit is just:
+
+```bash
+cellcap audit-cell --arfcn 1015 --device hackrf=0
+```
+
+Pass an empty `--history ""` / `--output-dir ""` to turn either off, or `--no-scan` to skip the
+pre-scan (keeps the SI3/cipher/auth/identity checks, drops the LAC/signal/history comparison).
 
 The checks are heuristics on passively observed behaviour, not proof: a real cell can miss a check
 in a short window, and a sophisticated catcher can fake one. Keep the pcapng (`cellcap run

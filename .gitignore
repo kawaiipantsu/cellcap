@@ -4,3 +4,6 @@
 *.pcap
 *.cfile
 cellcap-decode
+
+# local scratch screenshot (not part of the project)
+/misalign.png

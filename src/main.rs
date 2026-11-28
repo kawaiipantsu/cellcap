@@ -142,7 +142,7 @@ enum Command {
         #[arg(long = "freq", value_name = "FREQUENCY", value_parser = freq::parse_hz)]
         freq: Option<u64>,
         /// Seconds to collect signalling before scoring
-        #[arg(long, default_value_t = 120, value_name = "SECONDS")]
+        #[arg(long, default_value_t = 180, value_name = "SECONDS")]
         seconds: u64,
         /// Skip the neighbourhood pre-scan (faster, but no LAC/signal/history checks)
         #[arg(long = "no-scan")]
@@ -154,9 +154,9 @@ enum Command {
             value_name = "FILE"
         )]
         history: PathBuf,
-        /// Also save the collected frames to a pcapng here (evidence / offline analysis)
-        #[arg(long, value_name = "DIR")]
-        output_dir: Option<PathBuf>,
+        /// Save collected frames to a pcapng here for evidence (empty to disable)
+        #[arg(long, default_value = "/var/lib/cellcap/audits", value_name = "DIR")]
+        output_dir: PathBuf,
     },
     /// Capture the LTE (4G) downlink into a Wireshark MAC-LTE pcap (drives LTESniffer)
     Lte {
@@ -514,7 +514,7 @@ fn main() -> Result<()> {
                 probe_seconds: scan.probe_seconds,
                 scan: !no_scan,
                 history: (!history.as_os_str().is_empty()).then_some(history),
-                output_dir,
+                output_dir: (!output_dir.as_os_str().is_empty()).then_some(output_dir),
             };
             audit::run(&r, &s, hz, &opts)?;
         }

@@ -72,6 +72,17 @@ pub struct Opts {
     pub output_dir: Option<PathBuf>,
 }
 
+/// The header box's inner width, and its three logo/title rows. The tower's mast
+/// glyphs (┬ │ ┴) sit at the SAME character column in every row, and every
+/// character before the mast is one cell wide, so the mast stacks. (The original
+/// bug was simply the base row's ┴ a column to the left of the ┬/│ above it.)
+const BOX_W: usize = 58;
+const HEADER_ROWS: [(&str, &str); 3] = [
+    ("   )) ┬ ((   ", "cellcap · cell audit"),
+    ("    \\ │ /    ", "passive GSM cell-integrity check"),
+    ("    ──┴──    ", "listens only, never transmits"),
+];
+
 const GREEN: &str = "\x1b[32m";
 const RED: &str = "\x1b[31m";
 const YELLOW: &str = "\x1b[33m";
@@ -862,9 +873,17 @@ fn print_report(
     let cyan = c(colour, CYAN);
 
     println!();
-    println!("{bold}╔══════════════════════════════════════════════════════════════╗{reset}");
-    println!("{bold}║  cellcap cell audit{reset}                                            {bold}║{reset}");
-    println!("{bold}╚══════════════════════════════════════════════════════════════╝{reset}");
+    let red = c(colour, RED);
+    let rule = "═".repeat(BOX_W);
+    println!("{bold}{red}╔{rule}╗{reset}");
+    for (logo, title) in HEADER_ROWS {
+        let pad = BOX_W.saturating_sub(logo.chars().count() + title.chars().count());
+        println!(
+            "{bold}{red}║{reset}{red}{logo}{reset}{bold}{title}{reset}{:pad$}{bold}{red}║{reset}",
+            ""
+        );
+    }
+    println!("{bold}{red}╚{rule}╝{reset}");
     let ident = match &obs.cell {
         Some(cell) => {
             let name = crate::e212::describe(&cell.mcc, &cell.mnc);
@@ -967,6 +986,35 @@ mod tests {
         f(&mut o);
         let s = evaluate(&o, &Context::default());
         (100u32.saturating_sub(s.penalty), s.flags)
+    }
+
+    #[test]
+    fn header_tower_mast_stacks() {
+        // The three mast glyphs must sit at the same character column, and every
+        // character before the mast must be one cell wide (ASCII, or box-drawing
+        // like the border) so that column is the same width in each row.
+        let masts = ['┬', '│', '┴'];
+        let logo_w = HEADER_ROWS[0].0.chars().count();
+        let col = HEADER_ROWS[0].0.chars().position(|c| c == masts[0]);
+        assert!(col.is_some(), "row 1 must have a mast");
+        for (i, (logo, title)) in HEADER_ROWS.iter().enumerate() {
+            assert_eq!(logo.chars().count(), logo_w, "logo columns must match");
+            assert_eq!(
+                logo.chars().position(|c| c == masts[i]),
+                col,
+                "mast must stack: {logo:?}"
+            );
+            for c in logo.chars().take_while(|&c| c != masts[i]) {
+                assert!(
+                    c == ' ' || "()\\/─".contains(c),
+                    "only one-cell glyphs before the mast: {c:?}"
+                );
+            }
+            assert!(
+                title.chars().count() + logo_w <= BOX_W,
+                "row too long: {title}"
+            );
+        }
     }
 
     #[test]
