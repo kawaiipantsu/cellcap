@@ -11,6 +11,7 @@ mod check;
 mod decode;
 mod disclaimer;
 mod e212;
+mod e212_generated;
 mod freq;
 mod gsmtap;
 mod history;
@@ -102,6 +103,12 @@ enum Command {
     Disclaimer,
     /// Check that the required tools and an SDR are present (a ✓/✗ checklist)
     Check,
+    /// Look up a network or country: MCC, MCC MNC, or a country name (no SDR)
+    Lookup {
+        /// `238`, or `238 01`, or a country name like `Denmark`
+        #[arg(value_name = "MCC | MCC MNC | COUNTRY", required = true)]
+        query: Vec<String>,
+    },
     /// Read the SIM's current session key Kc from a serial GSM modem (AT+CRSM)
     ExtractKc {
         /// Serial device of the modem
@@ -456,6 +463,48 @@ fn main() -> Result<()> {
             }
         }
         Command::Check => check::run()?,
+        Command::Lookup { query } => {
+            let numeric = |s: &String| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
+            match query.as_slice() {
+                // MCC MNC -> one network.
+                [mcc, mnc] if numeric(mcc) && numeric(mnc) => {
+                    let label = e212::describe(mcc, mnc);
+                    if label.is_empty() {
+                        println!("{mcc}/{mnc}  (unknown)");
+                    } else {
+                        println!("{mcc}/{mnc}  {label}");
+                    }
+                }
+                // MCC -> country and all its networks.
+                [mcc] if numeric(mcc) => {
+                    println!(
+                        "MCC {mcc}  {}",
+                        e212::country(mcc).unwrap_or("(unknown country)")
+                    );
+                    let ops = e212::operators_for(mcc);
+                    if ops.is_empty() {
+                        println!("  (no networks listed)");
+                    }
+                    for (mnc, name) in ops {
+                        println!("  {mcc}/{mnc:<3}  {name}");
+                    }
+                }
+                // Anything else -> treat as a country name.
+                _ => {
+                    let q = query.join(" ");
+                    let hits = e212::country_codes(&q);
+                    if hits.is_empty() {
+                        println!("no country matching {q:?}");
+                    }
+                    for (mcc, name) in hits {
+                        println!(
+                            "MCC {mcc}  {name}  ({} network(s))",
+                            e212::operators_for(mcc).len()
+                        );
+                    }
+                }
+            }
+        }
         Command::ExtractKc { device, baud } => {
             let kc = atmodem::read_kc(&device, baud)?;
             println!("Kc    {}", kc.kc_hex);

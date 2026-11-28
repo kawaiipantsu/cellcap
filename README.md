@@ -67,6 +67,7 @@ The GSM demodulation is done by [gr-gsm](https://github.com/ptrkrysik/gr-gsm) an
 | `cellcap sim-info [DEVICE]` | Read IMSI, Kc, GPRS Kc and TMSI/LAI from the SIM. |
 | `cellcap audit-sim [DEVICE]` | Report the SIM's toolkit/OTA attack surface (Simjacker/WIB class). |
 | `cellcap audit-cell --arfcn N` | Camp on a cell, then score it legit vs rogue/IMSI-catcher (a ✓/✗ checklist). |
+| `cellcap lookup 238 01` | Look up a network/country by MCC, MCC MNC, or country name (no SDR). |
 | `cellcap disclaimer` | Print the legal/ethical disclaimer (also `cellcap --disclaimer`). |
 
 ## Quickstart
@@ -294,6 +295,22 @@ cellcap inspect cellcap-gsm-20261127T085130Z.pcapng
 
 Prints frame counts by message type and channel, the cells seen and the time span — a quick way
 to confirm a file holds what you want before opening Wireshark. No SDR needed.
+
+### Look up operators and countries — `cellcap lookup`
+
+```bash
+cellcap lookup 238 01        # one network:   238/01  TDC A/S · Denmark
+cellcap lookup 238           # a country and all its networks
+cellcap lookup Denmark       # country name -> MCC(s)
+```
+
+MCC/MNC names come from a small hand-curated table (cellcap's preferred labels, e.g. "Telenor
+(test)") backed by a broad generated table of 2600+ networks. The same lookup is what the capture
+and audit views use to name cells. Refresh the generated table with `make e212-data`.
+
+> Operator/country data from **[mcc-mnc.org](https://mcc-mnc.org/downloads)** (free for commercial
+> and non-commercial use). Regenerate via `tools/gen-e212.py`; cellcap's curated names take
+> precedence over it.
 
 ### Audit a cell — `cellcap audit-cell`
 

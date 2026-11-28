@@ -5,7 +5,7 @@ BIN     := cellcap
 SERVICE := cellcap.service
 STATE   := /var/lib/cellcap
 
-.PHONY: help build release test check decoder install uninstall start stop status logs
+.PHONY: help build release test check decoder e212-data install uninstall start stop status logs
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -27,6 +27,13 @@ check: ## Formatting, lints and tests
 decoder: ## Generate the patched decoder from grgsm_decode (needed for 'decode')
 	@command -v grgsm_decode >/dev/null || { echo "grgsm_decode not found: apt install gr-gsm"; exit 1; }
 	python3 tools/gen-decoder.py $(PREFIX)/bin/cellcap-decode
+
+e212-data: ## Refresh the operator table from mcc-mnc.org (downloads networks.csv)
+	@csv=$$(mktemp) && \
+	  curl -fsSL -A cellcap -o $$csv https://mcc-mnc.org/downloads/networks.csv && \
+	  python3 tools/gen-e212.py $$csv src/e212_generated.rs && \
+	  rm -f $$csv && \
+	  echo "regenerated src/e212_generated.rs; rebuild to pick it up"
 
 install: ## Install the binary, decoder, service and user (run as root, after 'make release')
 	@[ -f target/release/$(BIN) ] || { echo "target/release/$(BIN) not found: run 'make release' first"; exit 1; }

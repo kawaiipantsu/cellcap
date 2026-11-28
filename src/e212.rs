@@ -1,14 +1,19 @@
 //! E.212 MCC/MNC lookup: turn the numeric codes a cell broadcasts into a
 //! readable operator and country, e.g. 238/01 -> "TDC A/S · Denmark".
 //!
-//! The air interface only carries the numbers; these names come from the ITU
-//! E.212 assignments (the same table Wireshark ships). The operator list is
-//! focused on the Nordics and major networks and degrades gracefully — an
-//! unknown MNC still shows the country, and an unknown MCC just shows the codes.
-//! It is easy to extend: add a row to OPERATORS or COUNTRIES.
+//! The air interface only carries the numbers; these names come from two tables.
+//! The small hand-curated [`OPERATORS`]/[`COUNTRIES`] below are checked first, so
+//! cellcap's preferred labels (e.g. "Telenor (test)") win; everything else falls
+//! back to the broad generated table in `e212_generated.rs` (2600+ networks, data
+//! from mcc-mnc.org — see `tools/gen-e212.py`, refresh with `make e212-data`).
+//! Lookups degrade gracefully: an unknown MNC still shows the country, and an
+//! unknown MCC shows nothing (callers print the raw codes).
 
-/// MCC -> country. Broad coverage of the networks a passive receiver is likely
-/// to see; extend as needed.
+use crate::e212_generated::{GEN_COUNTRIES, GEN_OPERATORS};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// MCC -> country. Curated names that win over the generated table.
+#[rustfmt::skip]
 const COUNTRIES: &[(&str, &str)] = &[
     ("202", "Greece"), ("204", "Netherlands"), ("206", "Belgium"), ("208", "France"),
     ("212", "Monaco"), ("213", "Andorra"), ("214", "Spain"), ("216", "Hungary"),
@@ -57,8 +62,10 @@ const COUNTRIES: &[(&str, &str)] = &[
     ("740", "Ecuador"), ("744", "Paraguay"), ("746", "Suriname"), ("748", "Uruguay"),
 ];
 
-/// (MCC, MNC) -> operator. Nordics are complete; elsewhere the major networks.
-/// MNC is the canonical form a cell broadcasts (leading zeros kept).
+/// (MCC, MNC) -> operator. Hand-curated names that win over the generated table
+/// (cellcap's preferred labels, like "Telenor (test)"). MNC is the canonical
+/// form a cell broadcasts (leading zeros kept).
+#[rustfmt::skip]
 const OPERATORS: &[(&str, &str, &str)] = &[
     // Denmark (238)
     ("238", "01", "TDC A/S"), ("238", "02", "Telenor"), ("238", "03", "MIGway"),
@@ -96,28 +103,60 @@ const OPERATORS: &[(&str, &str, &str)] = &[
 
 /// Pad/normalise an MNC so the scanner path ("1") matches a broadcast key ("01").
 fn mnc_variants(mnc: &str) -> [String; 3] {
-    [
-        mnc.to_string(),
-        format!("{mnc:0>2}"),
-        format!("{mnc:0>3}"),
-    ]
+    [mnc.to_string(), format!("{mnc:0>2}"), format!("{mnc:0>3}")]
 }
 
-/// The operator name for a PLMN, if known.
+/// The operator name for a PLMN, if known. Curated names win; otherwise the
+/// generated mcc-mnc.org table fills in.
 pub fn operator(mcc: &str, mnc: &str) -> Option<&'static str> {
     let vars = mnc_variants(mnc);
-    OPERATORS
-        .iter()
-        .find(|(m, n, _)| *m == mcc && vars.iter().any(|v| v == n))
-        .map(|(_, _, name)| *name)
+    let find = |table: &'static [(&str, &str, &str)]| {
+        table
+            .iter()
+            .find(|(m, n, _)| *m == mcc && vars.iter().any(|v| v == n))
+            .map(|(_, _, name)| *name)
+    };
+    find(OPERATORS).or_else(|| find(GEN_OPERATORS))
 }
 
-/// The country for an MCC, if known.
+/// The country for an MCC, if known (curated first, then generated).
 pub fn country(mcc: &str) -> Option<&'static str> {
-    COUNTRIES
-        .iter()
-        .find(|(m, _)| *m == mcc)
-        .map(|(_, name)| *name)
+    let find = |table: &'static [(&str, &str)]| {
+        table.iter().find(|(m, _)| *m == mcc).map(|(_, name)| *name)
+    };
+    find(COUNTRIES).or_else(|| find(GEN_COUNTRIES))
+}
+
+/// Every known (MNC, operator) for an MCC, curated names overriding generated,
+/// sorted by MNC. For `cellcap lookup <MCC>`.
+pub fn operators_for(mcc: &str) -> Vec<(&'static str, &'static str)> {
+    let mut map: BTreeMap<&'static str, &'static str> = BTreeMap::new();
+    for (m, n, name) in GEN_OPERATORS {
+        if *m == mcc {
+            map.insert(n, name);
+        }
+    }
+    for (m, n, name) in OPERATORS {
+        if *m == mcc {
+            map.insert(n, name); // curated wins
+        }
+    }
+    map.into_iter().collect()
+}
+
+/// MCCs whose country name contains `query` (case-insensitive). For
+/// `cellcap lookup <country>`.
+pub fn country_codes(query: &str) -> Vec<(&'static str, &'static str)> {
+    let q = query.to_lowercase();
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for (mcc, name) in COUNTRIES.iter().chain(GEN_COUNTRIES) {
+        if name.to_lowercase().contains(&q) && seen.insert(*mcc) {
+            out.push((*mcc, *name));
+        }
+    }
+    out.sort();
+    out
 }
 
 /// A readable label for a PLMN: "TDC A/S · Denmark", or "Denmark", or "" when
@@ -162,5 +201,21 @@ mod tests {
         assert_eq!(describe("999", "99"), ""); // unknown everything
         assert_eq!(short("238", "99"), "Denmark");
         assert_eq!(short("238", "20"), "Telia");
+    }
+
+    #[test]
+    fn generated_fills_the_long_tail_and_curated_wins() {
+        // A network only in the generated mcc-mnc.org table still resolves.
+        assert!(operator("460", "00").is_some()); // China — not in the curated list
+                                                  // A curated override beats the generated name for the same PLMN.
+        assert_eq!(operator("238", "66"), Some("Telenor (test)"));
+        // operators_for merges both tables, curated winning, far beyond the handful.
+        let dk = operators_for("238");
+        assert!(dk
+            .iter()
+            .any(|(n, name)| *n == "66" && *name == "Telenor (test)"));
+        assert!(dk.len() > 25);
+        // Reverse country lookup finds Denmark.
+        assert!(country_codes("denmark").iter().any(|(m, _)| *m == "238"));
     }
 }
